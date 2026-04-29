@@ -9,14 +9,15 @@ The full Phase 0 → 5 flow takes ~20 minutes. To survive context reload, timeou
 
 ## What to save
 
-`trip.json` carries a top-level `_progress` field:
+`trip.json` carries a top-level `_progress` field. **Single canonical schema** used by both `trip-planner` (phases 1–4) and `trip-html-generator` (phase 5 sub-steps):
 
 ```json
 {
   "_progress": {
-    "completed_phase": 3,
+    "completed_phase": 3,                    // 1, 1.5, 2, 3, 4, 4.5, 5
+    "phase5_step": null,                     // null until phase 5; then "B1"|"B2"|...|"D"
     "updated_at": "2026-04-29T14:30:00+08:00",
-    "next_action": "Phase 4 deep research"
+    "next_action": "Phase 4 deep research"   // human-readable hint
   },
   "logistics": { ... },
   "budget": { ... },
@@ -27,6 +28,15 @@ The full Phase 0 → 5 flow takes ~20 minutes. To survive context reload, timeou
   "research": { ... }
 }
 ```
+
+**Phase 5 sub-steps** (set `phase5_step` to the just-finished step):
+- `B1` skeleton → `B2` i18n → `B3` POIs → `B4` schedule → `B5` aux
+- `C1`–`C8` app.js function groups
+- `D` index.html + style.css
+
+When phase 5 succeeds, you may either delete `_progress` or leave it (the template ignores unknown fields).
+
+`trip-html-generator/references/phase-5-generation-strategy.md` references this same schema — do not redefine it elsewhere.
 
 ## When to write (only at high-cost boundaries)
 

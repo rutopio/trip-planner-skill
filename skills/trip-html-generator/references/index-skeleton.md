@@ -10,11 +10,36 @@ The HTML shell is identical across every trip. It contains layout scaffolding, m
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title data-i18n="meta.title">Trip Plan</title>
 
+  <!-- 1. Google Fonts: Noto Sans (TC/JP/KR) + Material Symbols -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,400..700,0..1,-50..200&display=swap" />
 
+  <!-- 2. Leaflet CSS + JS (CartoDB Voyager tiles set in app.js) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+
+  <!-- 3. Tailwind CSS (CDN JIT runtime) — handles 90% of styling. -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Noto Sans TC"', '"Noto Sans JP"', '"Noto Sans KR"', '-apple-system', 'system-ui', 'sans-serif'],
+          },
+          colors: {
+            accent: 'var(--accent)',
+            ink: 'var(--text)',
+            paper: 'var(--bg)',
+          },
+          borderRadius: { DEFAULT: 'var(--r)' },
+        },
+      },
+    };
+  </script>
+
+  <!-- 4. Custom CSS — minimal. Theme tokens + Tailwind-can't-do exceptions only. -->
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>

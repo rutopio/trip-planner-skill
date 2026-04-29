@@ -91,11 +91,9 @@ After each group: do NOT run validator (it requires `index.html` to exist). Just
 
 ## D. Build `index.html` and `style.css` Last
 
-Both can be written in one shot — neither typically exceeds ~600 lines.
-
-1. `index.html` — copy from `index-skeleton.md` verbatim, fill `__TRIP_JSON__` with the JSON-stringified `trip.json`.
-2. `style.css` — generate from chosen UI style (Phase 4.5) + design tokens.
-3. Run **full validator** (no `--schema-only`):
+1. **`index.html`** — copy from `index-skeleton.md` verbatim. The skeleton already includes the three CDN tags (Tailwind + Leaflet + Google Fonts) and Tailwind theme config. Replace `__TRIP_JSON__` with the JSON-stringified `trip.json`.
+2. **`style.css`** — minimal. Tailwind handles 90% of styling via CDN. Custom CSS only for the exceptions documented in [cdn-and-styling.md](cdn-and-styling.md) (CSS variables, Leaflet overrides, animations, calendar grid math, UI-style pack specifics). **Target: 50–200 lines.** If you exceed 400, audit and convert to Tailwind classes.
+3. **Run full validator** (no `--schema-only`):
    ```bash
    node skills/trip-html-generator/scripts/validate-trip.mjs <trip-folder>
    ```
@@ -105,27 +103,15 @@ Both can be written in one shot — neither typically exceeds ~600 lines.
 
 ## E. Checkpoint & Resume (mid-Phase-5)
 
-Phase 5 is long enough to time out mid-section. Track progress in `data/trip.json._progress`:
+Phase 5 is long enough to time out mid-section. Track progress in `data/trip.json._progress` using the **single canonical schema defined in [trip-planner/references/checkpoint.md](../../trip-planner/references/checkpoint.md)**.
 
-```json
-{
-  "_progress": {
-    "completed_phase": 4,
-    "phase5_step": "B3",
-    "updated_at": "2026-04-29T15:42:00+08:00"
-  },
-  "lang": "zh",
-  "...": "..."
-}
-```
-
-After each section/group completes, update `_progress.phase5_step` to the **just-finished** step (`B1`/`B2`/`B3`/`B4`/`B5`/`C1`...`C8`/`D`). On resume:
+After each section/group completes, update `_progress.phase5_step` to the **just-finished** step (`B1`/`B2`/`B3`/`B4`/`B5`/`C1`...`C8`/`D`). Also update `_progress.updated_at`. On resume:
 
 1. Read `_progress.phase5_step`.
 2. Resume at the next step (e.g., `B3` finished → continue at `B4`).
 3. Do NOT re-write earlier sections — they're already in the file.
 
-When the full validator passes in step D, **delete `_progress`** (or leave it — the template ignores unknown fields, but a clean ship is preferred).
+When the full validator passes in step D, you may delete `_progress` or leave it (template ignores unknown fields).
 
 ---
 

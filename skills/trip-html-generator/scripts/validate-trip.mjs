@@ -31,12 +31,31 @@ import { readFileSync, existsSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { argv, exit } from 'node:process';
 
+// Baseline UI keys — every generated trip MUST cover these. Component-specific
+// keys (today_*, todo_*, clock_*, nomad_*) are required by the renderer at
+// runtime; if missing, the UI shows blank labels. Keep this list in sync with
+// app-skeleton.md §Required i18n keys.
 const REQUIRED_I18N_KEYS = [
+  // Page chrome
   'meta.title',
+  // Tab labels
   'tab.today', 'tab.spots', 'tab.calendar', 'tab.budget',
   'tab.booking', 'tab.checklist', 'tab.retro',
+  // Common labels
   'label.total', 'label.booked', 'label.estimated', 'label.actual',
   'empty.no_events',
+  // Cover + Today overlays
+  'cover.go',
+  'today_days_left', 'today_enter', 'today_start',
+  'today_now', 'today_next', 'today_free',
+  'today_events', 'today_ended', 'today_todo_title', 'today_first', 'today_entry_title',
+  'today_morning', 'today_afternoon', 'today_evening',
+  // Pre-trip todo items
+  'todo_pack', 'todo_passport', 'todo_esim', 'todo_cash', 'todo_charger',
+  'todo_checkin', 'todo_tickets', 'todo_hotel', 'todo_weather',
+  'todo_itinerary', 'todo_flights',
+  // Clocks
+  'clock_dest', 'clock_home',
 ];
 
 const FORBIDDEN_GLOBAL_ARRAYS = [
@@ -44,6 +63,7 @@ const FORBIDDEN_GLOBAL_ARRAYS = [
   /\bPOIS\s*=/,
   /\bSCHEDULE\s*=/,
   /\bSCHEDULE_CITY_I18N\s*=/,
+  /\bNOMAD_SPOTS\s*=/,
 ];
 
 class Report {

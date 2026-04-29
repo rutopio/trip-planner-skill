@@ -4,6 +4,8 @@ This section is the **complete specification** for the HTML you generate. Follow
 produce a consistent, high-quality output every time. The design follows a **clean, minimal,
 calendar-app aesthetic** — NOT a travel blog hero layout.
 
+> **Implementation note:** All layout/spacing/typography/color examples in this doc that show CSS-rule snippets are *intent specs*, not implementation requirements. The actual implementation should use **Tailwind utility classes** in HTML wherever possible. Custom CSS in `style.css` is reserved for the narrow exceptions in [cdn-and-styling.md](cdn-and-styling.md) — design tokens, Leaflet overrides, animations, calendar grid math, and the chosen UI-style pack's distinctive treatment.
+
 #### Page Shell: Sidebar + Tab Panels
 
 The page is a flex row: fixed left sidebar (desktop) or fixed bottom bar (mobile), plus a
