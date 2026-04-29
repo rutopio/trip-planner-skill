@@ -1,6 +1,23 @@
-### trip.json Complete Schema (MANDATORY)
+### Trip Data Schema — Sharded Layout (MANDATORY)
 
-`data/trip.json` is the data backbone of the entire app. Below is the full top-level structure; every field is required unless explicitly marked optional:
+Trip data is sharded across multiple files in `data/`. The renderer (`app.js → loadTrip()`) fetches them in parallel and merges into a single `TRIP` object — the schema below describes that **merged object's shape**, which is also what the validator checks. Use it as the contract; the on-disk layout is:
+
+| Shard file | Top-level fields it provides |
+|------------|-------------------------------|
+| `data/trip.meta.json` | `lang`, `supportedLangs`, `destination`, `tagline`, `startDate`, `endDate`, `currency`, `cities`, `i18n` |
+| `data/pois.json` | array → merged as `pois` |
+| `data/schedule.json` | array → merged as `schedule` |
+| `data/weather.json` | array → merged as `weather` |
+| `data/budget.json` | object → merged as `budget` |
+| `data/booking.json` | object → merged as `booking` |
+| `data/checklist.json` | array → merged as `checklist` |
+| `data/flightIntel.json` (optional) | object → merged as `flightIntel` |
+| `data/entryRequirements.json` (optional) | array → merged as `entryRequirements` |
+| `data/entryForms.json` (optional) | array → merged as `entryForms` |
+| `data/holidays.json` (optional) | object → merged as `holidays` |
+| `data/retro.json` (optional) | object → merged as `retro` |
+
+The merged schema (every field below is required in the runtime `TRIP` object unless explicitly marked optional):
 
 > **Single-language is the default. Multi-language is opt-in only** — only include multiple `supportedLangs` if the user explicitly asks (e.g. "我要中英文"). See SKILL.md §Required Languages.
 >
@@ -35,7 +52,7 @@
 }
 ```
 
-**Template contract:** `index.html`, `style.css`, and `app.js` must contain ZERO trip-specific strings. Everything visible to the user is sourced from this JSON. See [template-contract.md](template-contract.md).
+**Template contract:** `index.html` (including its inline `<style>` block) and `app.js` must contain ZERO trip-specific strings. There is no separate `style.css`. Everything visible to the user is sourced from the `data/*.json` shards. See [template-contract.md](template-contract.md).
 
 ---
 

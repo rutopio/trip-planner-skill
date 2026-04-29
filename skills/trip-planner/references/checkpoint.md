@@ -9,7 +9,7 @@ The full Phase 0 → 5 flow takes ~20 minutes. To survive context reload, timeou
 
 ## What to save
 
-`trip.json` carries a top-level `_progress` field. **Single canonical schema** used by both `trip-planner` (phases 1–4) and `trip-html-generator` (phase 5 sub-steps):
+`data/trip.meta.json` carries a top-level `_progress` field (before Phase 5 starts, you may keep a single `data/trip.json` checkpoint file with the same schema; Phase 5 promotes it to the sharded layout). **Single canonical schema** used by both `trip-planner` (phases 1–4) and `trip-html-generator` (phase 5 sub-steps):
 
 ```json
 {

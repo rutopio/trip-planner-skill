@@ -1,6 +1,6 @@
 # `index.html` Skeleton — Generic, Trip-Agnostic
 
-The HTML shell is identical across every trip. It contains layout scaffolding, mount points, and `<script id="trip-data">` for `file://` fallback. **Zero trip-specific strings.**
+The HTML shell is identical across every trip. Pure layout scaffolding + mount points + CDN tags. **Zero trip-specific strings, zero inline trip data.** Trip data is fetched at runtime from `data/*.json` shards by `app.js → loadTrip()`.
 
 ```html
 <!DOCTYPE html>
@@ -39,8 +39,60 @@ The HTML shell is identical across every trip. It contains layout scaffolding, m
     };
   </script>
 
-  <!-- 4. Custom CSS — minimal. Theme tokens + Tailwind-can't-do exceptions only. -->
-  <link rel="stylesheet" href="style.css" />
+  <!-- 4. Inline <style> — design tokens + Tailwind-can't-do exceptions. NO external style.css. -->
+  <style>
+    /* === Design tokens (overridden by UI-style pack) === */
+    :root {
+      --bg: #FAFAFA;
+      --text: #0A0A0A;
+      --muted: #71717A;
+      --border: #E4E4E7;
+      --accent: #DC2626;             /* Swiss red — overridden by UI-style pack */
+      --r: 0px;                      /* Swiss = zero radius */
+      --pad: 24px;
+      --col-gap: 16px;
+      --font: 'Noto Sans TC', 'Noto Sans JP', 'Noto Sans KR', system-ui, sans-serif;
+      --city-color: #6B7280;         /* Set per-element by injectCityVars() */
+    }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); }
+
+    /* === Calendar absolute-positioning math (Tailwind can't do calc(60px*N)) === */
+    .cal-day-col { position: relative; }
+    .cal-event { position: absolute; left: 0; right: 0; }
+    /* Now-line indicator */
+    .cal-now-line {
+      position: absolute; left: 0; right: 0; height: 2px;
+      background: #e8664a; z-index: 5; pointer-events: none;
+    }
+    .cal-now-label {
+      position: absolute; left: -4px; top: -8px;
+      background: #e8664a; color: #fff; font-size: .65rem;
+      padding: 1px 6px; border-radius: 4px; font-weight: 600;
+      white-space: nowrap;
+    }
+
+    /* === Cover/Today overlay slide animations === */
+    .cover, .today-overlay { transition: transform .6s ease; }
+    .cover-hidden { transform: translateY(-100vh); }
+    .today-overlay.hidden { transform: translateY(-100%); }
+
+    /* === Leaflet overrides (Tailwind can't reach Leaflet's DOM) === */
+    .leaflet-popup-content-wrapper { border-radius: var(--r); }
+    .leaflet-popup-content { font-family: var(--font); margin: 12px 16px; }
+    .leaflet-container { font-family: var(--font); }
+
+    /* === Print mode === */
+    @media print {
+      .sidebar, .bottom-bar, #lang-switcher, .cover, .today-overlay,
+      #map, .cover-bottom, button { display: none !important; }
+      body { background: white; }
+      .tab-panel { display: block !important; page-break-after: always; }
+    }
+
+    /* === Pure-CSS bar charts (.h-bar-row width comes from inline --pct) === */
+    .h-bar { background: var(--text); height: 100%; transition: width .3s; }
+    .h-bar-row { height: 24px; background: var(--border); position: relative; overflow: hidden; }
+  </style>
 </head>
 <body>
   <!-- Sidebar (desktop) -->
@@ -163,10 +215,6 @@ The HTML shell is identical across every trip. It contains layout scaffolding, m
     </section>
   </main>
 
-  <!-- Inline trip data: file:// fallback. The CONTENT is identical to data/trip.json. -->
-  <script id="trip-data" type="application/json">__TRIP_JSON__</script>
-
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
@@ -174,8 +222,8 @@ The HTML shell is identical across every trip. It contains layout scaffolding, m
 
 ## Rules for the generator
 
-1. The shell above is **the entire `index.html`**. The only place trip data appears is inside `<script id="trip-data">` — and that is a verbatim copy of `data/trip.json`, not a hand-edited version.
-2. Replace `__TRIP_JSON__` with the JSON-stringified `trip.json` content (after producing `data/trip.json`). Both files carry the same payload.
+1. The shell above is **the entire `index.html`** — pure layout scaffolding with mount points. No trip data is inlined.
+2. Trip data lives entirely in `data/*.json` shards. `app.js → loadTrip()` fetches them in parallel at boot. Run `python3 serve.py` to serve over HTTP — `file://` is no longer supported (sharded loading needs `fetch`).
 3. Every text node visible to the user has either `data-i18n="key"` (resolved by `app.js → t(key)`) or is empty (filled by a renderer reading `TRIP.*`).
 4. Every tab button uses `data-tab="<id>"`. The `app.js` skeleton wires them up generically.
 5. Material Symbols icon names that describe **UI chrome** (nav icons themselves) may stay literal. Trip-data icons (weather, city, POI category) come from JSON.

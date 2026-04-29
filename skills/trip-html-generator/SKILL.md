@@ -2,7 +2,7 @@
 name: trip-html-generator
 description: >
   Generates a complete interactive HTML travel guide from researched trip data.
-  Produces a multi-file folder (index.html + style.css + app.js + data/trip.json)
+  Produces a multi-file folder (index.html + app.js + data/*.json shards). NO style.css — Tailwind CDN handles 90% of styling, the small amount of custom CSS lives in a <style> block inside index.html.
   with optional i18n, interactive maps, calendar views, expense tracking, and
   booking comparison.
   Trigger phrases: "generate the trip HTML", "create the travel guide",
@@ -12,9 +12,9 @@ description: >
 
 # Trip HTML Generator
 
-Generate a trip planner app as a **multi-file folder structure** (`index.html` + `style.css` + `app.js` + `data/trip.json`).
+Generate a trip planner app as a **multi-file folder structure** (`index.html` + `app.js` + `data/*.json` shards). **NO `style.css`** — Tailwind CDN handles 90% of styling; the small amount of custom CSS lives in a `<style>` block inside `index.html`.
 
-`data/trip.json` is the single source of truth. `index.html`, `style.css`, and `app.js` are a generic shell — the same shell across every trip — and contain ZERO trip-specific strings, prices, city names, or hardcoded data. Updating a trip = editing `trip.json` only.
+The `data/*.json` shards are the single source of truth. `index.html` and `app.js` are a generic shell — the same shell across every trip — and contain ZERO trip-specific strings, prices, city names, or hardcoded data. Updating a trip = editing one or more shards only.
 
 ---
 
@@ -26,9 +26,9 @@ Generate a trip planner app as a **multi-file folder structure** (`index.html` +
 | **[references/cdn-and-styling.md](references/cdn-and-styling.md)** | CDN dependencies (Tailwind / Leaflet / Google Fonts), styling decision tree, when (not) to write custom CSS |
 | **[references/components.md](references/components.md)** | Per-component rules: Cover, Today, Weather, POI Modal, Live Clocks, Now Line, Flight Card, Nomad Spots, GeoJSON, Booking links, Meal tracking, Currency, layering/z-index |
 | **[references/template-contract.md](references/template-contract.md)** | What may/may not appear in HTML/CSS/JS + the validation checklist |
-| **[references/index-skeleton.md](references/index-skeleton.md)** | Canonical `index.html` shell (copy verbatim, fill `__TRIP_JSON__`) |
-| **[references/app-skeleton.md](references/app-skeleton.md)** | Canonical `app.js` shape (`bootstrap`, `t()`, `L()`, `cityById`, render dispatch) |
-| **[references/trip-json-schema.md](references/trip-json-schema.md)** | Full `trip.json` schema (`lang`, `supportedLangs`, `cities`, `i18n`, `weather`, `booking`, `entryForms`, `retro`, …) |
+| **[references/index-skeleton.md](references/index-skeleton.md)** | Canonical `index.html` shell (copy verbatim — includes inline `<style>` block) |
+| **[references/app-skeleton.md](references/app-skeleton.md)** | Canonical `app.js` shape (`bootstrap`, `loadTrip` (sharded fetch), `t()`, `L()`, `cityById`, render dispatch) |
+| **[references/trip-json-schema.md](references/trip-json-schema.md)** | Schema for `data/*.json` shards (`trip.meta.json` carries `lang`, `supportedLangs`, `cities`, `i18n`; per-shard fields documented) |
 | **[references/layout-blueprint.md](references/layout-blueprint.md)** | Layout structure, design system, responsive breakpoints |
 | **[references/html-content-sections.md](references/html-content-sections.md)** | Tab-specific markup and content requirements |
 
@@ -40,18 +40,25 @@ Generate a trip planner app as a **multi-file folder structure** (`index.html` +
 
 ### Hard limits (single Write/Edit per call must obey these)
 
-**Universal ceiling: any single `Write` or `Edit` call MUST stay under 500 lines of new content.** Above 500 lines a single tool call takes 1–4 minutes to complete, and the user sees a spinner with no progress. Many small calls feel faster than one big call, even when total time is identical.
+**Universal ceiling: any single `Write` or `Edit` call MUST stay under 500 lines of new content.** Above 500 lines a single tool call takes 1–4 minutes to complete, and the user sees a spinner with no progress. Many small calls feel faster than one big call.
 
-| File | One-shot Write OK? | Per-call ceiling | Strategy |
-|------|---------------------|-------------------|----------|
-| `data/trip.json` | ❌ Never | **500 lines per section** | 5 sections (B1–B5). For B3 with > 10 POIs, split into B3a/B3b/... — 5 POIs per Edit max. For B4 with > 7 days, split per-3-days. |
-| `app.js` | ❌ Never | **500 lines per group** | 8 function groups (C1–C8). C1 is `Write`; C2–C8 use **shell append** (see below). If a render group exceeds 500 lines, split into C5a/C5b/etc. |
-| `index.html` | ✅ Once | ~400 lines | Copy `index-skeleton.md` verbatim. **Do NOT inline the trip.json into the HTML during Write** — substitute via `sed` after writing (see Step 4). |
-| `style.css` | ✅ Once | ~200 lines | Mostly empty — Tailwind handles 90% |
+| File | Strategy | Per-call ceiling |
+|------|----------|-------------------|
+| `data/trip.meta.json` | One `Write` (B1) | ~150 lines |
+| `data/pois.json` | One `Write` (B2). If > 500 lines, split into `pois.json` + `pois.2.json`. | 500 lines |
+| `data/schedule.json` | One `Write` (B3). If > 500 lines, split per-half-of-trip. | 500 lines |
+| `data/weather.json`, `budget.json`, `booking.json`, `checklist.json`, `flightIntel.json`, etc. | One `Write` each | ~200 lines each |
+| `app.js` | C1 = `Write` of bootstrap. C2–C8 = **shell append** (`cat >> ... << 'EOF'`). **Never re-Write app.js after C1; never `Edit` it.** | 500 lines per append |
+| `index.html` | One `Write` from `index-skeleton.md` verbatim. **No inline trip data** — `app.js` fetches shards at runtime. | ~180 lines |
+| `style.css` | **DOES NOT EXIST** — all CSS inlined in `<style>` block inside `index.html` | — |
+
+### Why multi-file shards (the most important rule)
+
+A single `data/trip.json` was retired because every `Edit` on a growing JSON file streamed the **whole file** through the LLM — costs scaled O(n²) with trip size. A 20-POI trip burned ~60k tokens just patching the JSON. Sharding makes each shard a single `Write` with token cost ∝ shard size only.
 
 ### Append vs Edit — use shell append for app.js
 
-For C2–C8, do NOT use the `Edit` tool to grow `app.js`. Edit recomputes string positions on a growing file and gets slow. Use `Bash` with heredoc append:
+For C2–C8, do NOT use `Edit` to grow `app.js`. Edit recomputes string positions on a growing file. Use `Bash` heredoc:
 
 ```bash
 cat >> "<folder>/app.js" << 'EOF'
@@ -61,52 +68,48 @@ function renderCalendar() {
 EOF
 ```
 
-This is O(1) regardless of file size. Same applies to growing `trip.json` mid-build via `jq` patches if needed; but for `trip.json` the cleaner path is `Edit` with surgical insertions because the append point is inside arrays (`pois`, `schedule`).
+This is O(1) regardless of file size.
 
 ### Required sequence (do not deviate)
 
 **Step 0 — Confirm output path.** Run `pwd`, propose `{pwd}/{destination-slug}-{year}/`, ask user. Then `mkdir -p <path>/data <path>/.claude`.
 
-**Step 1 — Announce the plan to the user.** In one short message, list the steps you will take and the order:
-> "I'll generate the trip in 14 steps: B1–B5 (trip.json sections) → C1–C8 (app.js groups) → D (index.html + style.css). Each step writes a file or appends to one, then I run schema-only validator. Starting B1 now."
+**Step 1 — Announce the plan to the user.** In one short message, list the steps:
+> "I'll generate the trip in ~15 steps: B1 (trip.meta) → B2 (pois) → B3 (schedule) → B4 (weather) → B5 (budget) → B6 (booking) → B7 (checklist) → B8/B9 (optional shards) → C1–C8 (app.js groups) → D (index.html with inline `<style>`). Each step is one Write (or one shell append for C2–C8), then I validate. Starting B1 now."
 
 This announcement is **mandatory**. It commits you publicly to the incremental flow and lets the user interrupt if you start drifting.
 
-**Step 2 — Execute B1 → B5** (build `data/trip.json`). Each sub-step:
-- B1: skeleton (`lang`, `supportedLangs`, `destination`, `startDate`, `endDate`, `currency`, `cities[]`, empty `i18n{}`, empty `pois:[]`, empty `schedule:[]`)
-- B2: `i18n.{lang}.{key}` for every required UI key (see `app-skeleton.md`)
-- B3: `pois[]` with full nested-i18n `name`/`desc`, `lat`, `lng`, `cat`, `city`
-- B4: `schedule[]` day-by-day events
-- B5: `weather[]`, `budget`, `booking`, `entryForms`, `flightIntel`, `retro`
+**Step 2 — Build `data/` shards (B1 → B7+).** Each shard is **one `Write` call** that creates the whole file from scratch. **Never `Edit` a shard after Writing it** — if you need to fix something, `Write` the whole shard again (still cheap; each shard is small).
+- B1: `data/trip.meta.json` — `lang`, `supportedLangs`, `destination`, `tagline`, `startDate`, `endDate`, `currency`, `cities[]`, `i18n.{lang}.{key}` (all UI chrome keys)
+- B2: `data/pois.json` — full nested-i18n POI array
+- B3: `data/schedule.json` — day-by-day events
+- B4: `data/weather.json`
+- B5: `data/budget.json`
+- B6: `data/booking.json`
+- B7: `data/checklist.json`
+- B8: `data/flightIntel.json` (if flights researched)
+- B9: `data/entryRequirements.json`, `data/entryForms.json`, `data/holidays.json`, `data/retro.json` (whichever apply)
 
 After EACH B-step:
-1. Update `_progress.phase5_step = "B<N>"` and `_progress.updated_at`
-2. Run `node skills/trip-html-generator/scripts/validate-trip.mjs <folder> --schema-only`
-3. **If validator fails, fix and re-run before moving on.** Do not proceed with cascading errors.
-4. **Output a one-line progress message to the user.** Mandatory. Format: `✅ B<N> done — {what was added} ({line count}). Validator green. → Starting B<N+1>: {next thing}...`. This 1–2 sentence ping every 1–3 minutes prevents the user thinking the run is frozen during long generations.
+1. Update `_progress.phase5_step = "B<N>"` in `trip.meta.json` (this is the only shard that may be re-Written; do it sparingly — once at end of each B-step is fine).
+2. Run `node skills/trip-html-generator/scripts/validate-trip.mjs <folder> --schema-only`. The validator merges all shards in memory.
+3. **If validator fails, fix and re-Write that shard before moving on.**
+4. **Output a one-line progress message.** Mandatory. Format: `✅ B<N> done — {filename} ({entry count}, {line count}). Validator green. → Starting B<N+1>: {next thing}...`
 
-**Step 3 — Execute C1 → C8** (build `app.js`).
-- C1: `Write` the entire bootstrap (`bootstrap`, `t()`, `L()`, `cityById()`, `bindLanguageSwitcher`, `bindTabs`, `showTab`, `applyLang`, `fmtMoney`, `injectCityVars`) — this is the only `Write` for app.js.
-- C2–C8: each appends one render group via **shell `cat >> ... << 'EOF'`**, NOT via `Edit`. See "Append vs Edit" above for syntax.
+**Step 3 — Build `app.js` (C1 → C8).**
+- C1: `Write` the entire bootstrap (`bootstrap`, `loadTrip`, `t()`, `L()`, `cityById()`, `bindLanguageSwitcher`, `bindTabs`, `showTab`, `applyLang`, `fmtMoney`, `injectCityVars`) — the **only** `Write` for app.js.
+- C2–C8: each appends one render group via **shell `cat >> ... << 'EOF'`**, NOT via `Edit`.
 - **Never re-`Write` app.js after C1.** Append only.
-- **No single C-step append may exceed 500 lines of new code.** If a render group is bigger, split into C5a/C5b/etc.
-- Update `_progress.phase5_step = "C<N>"` after each.
+- **No single C-step append may exceed 500 lines.** If a render group is bigger, split into C5a/C5b/etc.
+- Update `_progress.phase5_step = "C<N>"` (one re-Write of `trip.meta.json` is OK per group).
 - Output progress: `✅ C<N> done — {functions added} ({line count}). → Starting C<N+1>...`
 
-**Step 4 — D (index.html + style.css).**
-- Copy `index-skeleton.md` verbatim → `index.html`. **Leave `__TRIP_JSON__` as the literal placeholder.** Do NOT inline the trip.json contents in this Write — that bloats the call by thousands of lines.
-- Substitute the JSON via shell after the Write (Python over sed for binary-safety with multibyte JSON):
-  ```bash
-  cd "<folder>" && python3 -c "
-  import json, pathlib
-  d = pathlib.Path('data/trip.json').read_text()
-  h = pathlib.Path('index.html').read_text()
-  pathlib.Path('index.html').write_text(h.replace('__TRIP_JSON__', d))
-  "
-  ```
-- Generate minimal `style.css` (50–200 lines). Custom CSS only for the exceptions in `cdn-and-styling.md`.
+**Step 4 — D (index.html + serve.py).**
+- `Write` `index.html` from `index-skeleton.md` verbatim. **No JSON inlining, no separate style.css.** All custom CSS is already in the skeleton's inline `<style>` block. Trip data is loaded at runtime from `data/*.json` shards by `app.js → loadTrip()`. Single small Write (~250 lines including the `<style>` block).
+- **Do NOT write a `style.css` file.** Tailwind CDN + the inline `<style>` block cover 100% of styling. If a UI-style pack needs different design tokens, edit the `:root { ... }` rule INSIDE the existing `<style>` block — never extract it to a separate file.
+- `Write` `serve.py` (10 lines, mandatory — `file://` no longer works because sharded `fetch` requires HTTP).
 - Update `_progress.phase5_step = "D"`.
-- Output progress: `✅ D done — index.html ({n} lines) + style.css ({m} lines) + trip.json injected. → Running final validator...`
+- Output progress: `✅ D done — index.html (with inline <style>) + serve.py written. → Running final validator...`
 
 **Step 5 — Final validator.** Full check, no `--schema-only`:
 ```bash
@@ -118,20 +121,21 @@ Must exit 0. Fix any failures.
 
 Before calling any file-writing tool, ask yourself:
 - Is this Write/Edit/append > **500 lines** of new content? → STOP. Split it.
+- Am I about to `Edit` a JSON shard? → STOP. `Edit` on a JSON file streams the whole file through the LLM (token cost is O(file size), not O(diff size)). Either `Write` the whole shard fresh, or split the data into a numbered overflow shard (`pois.2.json`).
 - Am I about to re-`Write` `app.js` after C1? → STOP. Use `cat >> ... << 'EOF'` to append.
-- Am I about to inline the trip.json into the index.html Write call? → STOP. Use `__TRIP_JSON__` placeholder + Python substitution after.
-- Did I update `_progress.phase5_step` after the last step? → If not, do it before this one.
+- Am I about to inline trip data into `index.html`? → STOP. There is no inline trip data anymore. `app.js → loadTrip()` fetches the shards.
+- Did I update `_progress.phase5_step` after the last step? → If not, do it before this one (re-Write `trip.meta.json` is fine, it's small).
 - Has the schema-only validator run since the last B-step? → If not, run it now.
 - Have I told the user what just finished and what's starting next? → If not, output the one-line progress ping first.
 
 ### When to consult the longer doc
 
 Most LLMs don't need to open `phase-5-generation-strategy.md` — the rules above are sufficient. Open it ONLY if:
-- A B/C step's content is unclear (which fields go in B3 vs B5? what's in C5?)
+- A shard's content is unclear (which fields go in `trip.meta.json` vs `pois.json`?)
 - You need the resume-from-checkpoint logic
 - You're debugging a mid-Phase-5 failure
 
-Track progress in `data/trip.json._progress.phase5_step` for resume. Schema defined in [trip-planner/references/checkpoint.md](../trip-planner/references/checkpoint.md).
+Track progress in `data/trip.meta.json._progress.phase5_step` for resume. Schema defined in [trip-planner/references/checkpoint.md](../trip-planner/references/checkpoint.md).
 
 ---
 
@@ -199,7 +203,7 @@ Every UI string the user reads (tab labels, buttons, headings, empty states, sta
 
 The shell uses CDN-hosted **Tailwind CSS v3 JIT runtime**. Default to Tailwind utility classes; write custom CSS only for the narrow exceptions in [cdn-and-styling.md](references/cdn-and-styling.md).
 
-If your `style.css` exceeds 400 lines, you're not using Tailwind enough — audit and convert.
+If a `style.css` file exists at all, that's a bug — delete it and inline content into the `<style>` block in `index.html`. The inline `<style>` block should stay under 200 lines; if it grows past that, you're hand-writing CSS that should be Tailwind utilities in the markup.
 
 Material Symbols Outlined is the icon font. No emoji except country flags in passport contexts.
 
@@ -210,10 +214,10 @@ Material Symbols Outlined is the icon font. No emoji except country flags in pas
 The validator (`scripts/validate-trip.mjs`) blocks all of these:
 
 - Missing required files or missing mount points.
-- `trip.json` schema violations (missing fields, dangling city refs).
+- Trip data schema violations (missing fields, dangling city refs across shards).
 - `i18n` coverage gaps (every key × every `supportedLangs`).
 - Flat-sibling i18n keys (`name_en`, `desc_ko`, …).
-- Trip-specific tokens leaking into `index.html`/`app.js`/`style.css`.
+- Trip-specific tokens leaking into `index.html` or `app.js` (style.css doesn't exist).
 - Per-city CSS selectors (`.wd-city-busan`).
 - Module-scope literal arrays in app.js (`WEATHER_DATA`, `POIS`, `SCHEDULE`, `NOMAD_SPOTS`, `SCHEDULE_CITY_I18N`).
 - Conditional language ladders in JS (`lang === 'zh' ? ... : ...`).
@@ -227,14 +231,25 @@ If the validator reports failures: regenerate the offending file. Do not ship a 
 
 ```
 {destination-slug}-{year}/
-├── index.html        # HTML shell + 3 CDN tags + inline JSON fallback
-├── style.css         # Minimal — Tailwind handles 90%
-├── app.js            # All render logic
+├── index.html              # HTML shell + 3 CDN tags + mount points
+                            # NO style.css — all CSS inline in index.html <style> block
+├── app.js                  # All render logic
 ├── data/
-│   └── trip.json     # Source of truth
-├── serve.py          # Local dev server
+│   ├── trip.meta.json      # lang, supportedLangs, cities, i18n, dates, currency
+│   ├── pois.json           # POI array
+│   ├── schedule.json       # day-by-day events
+│   ├── weather.json        # forecast per day
+│   ├── budget.json         # items + actual_expenses
+│   ├── booking.json        # purchased + compare + recommended
+│   ├── checklist.json      # pre-trip checklist groups
+│   ├── flightIntel.json    # (optional) flight price intelligence
+│   ├── entryRequirements.json   # (optional) per-country requirements
+│   ├── entryForms.json     # (optional) pre-fill data for arrival forms
+│   ├── holidays.json       # (optional) host-country holidays
+│   └── retro.json          # (optional) post-trip retrospective
+├── serve.py                # Local dev server (mandatory — file:// not supported)
 └── .claude/
-    └── launch.json   # Preview config
+    └── launch.json         # Preview config
 ```
 
 External deps (CDN): Tailwind, Leaflet + CartoDB Voyager basemap, Google Fonts (Noto Sans + Material Symbols). All listed in [cdn-and-styling.md](references/cdn-and-styling.md).
@@ -249,6 +264,6 @@ Default style is **Swiss Minimalist** (clean grid, red accent, zero rounded corn
 
 > "Trip is live at `http://localhost:8765` with the **Swiss Minimalist** style (the default). Want to keep it, or try a different style? Travel-friendly options: Luxury Editorial, Botanical, Newsprint, Professional Serif, Academia, Organic, Monochrome."
 
-If the user wants a different style: hand off to the `ui-style` skill, read the chosen style's reference, then **rerun ONLY Phase 5 step D** (regenerate `style.css` from the new design tokens). `trip.json`, `app.js`, and `index.html` stay untouched. This is fast — usually under a minute.
+If the user wants a different style: hand off to the `ui-style` skill, read the chosen style's reference, then **edit the `<style>` block inside `index.html`** — replace the `:root { ... }` CSS variables with the new pack's tokens, and update the `tailwind.config = { theme.extend }` script if needed. All `data/*.json` shards, `app.js`, and the rest of `index.html` stay untouched. This is fast — usually under a minute.
 
 If the user is happy with Swiss: do nothing more. The trip is done.

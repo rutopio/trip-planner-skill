@@ -1,13 +1,15 @@
 # `app.js` Skeleton — Generic, Trip-Agnostic
 
-This is the canonical `app.js` shape every generated trip uses. **It contains zero trip-specific strings.** Everything user-visible comes from `trip.json` (`i18n`, `cities`, `pois`, `schedule`, `weather`, `budget`, `booking`, `checklist`, `retro`).
+This is the canonical `app.js` shape every generated trip uses. **It contains zero trip-specific strings.** Everything user-visible comes from the `data/` shard files (`trip.meta.json` + `pois.json` + `schedule.json` + `weather.json` + `budget.json` + `booking.json` + `checklist.json` + optional `flightIntel.json` / `entryRequirements.json` / `entryForms.json` / `holidays.json` / `retro.json`).
+
+**Why sharded:** writing one big `trip.json` during Phase 5 generation gets exponentially expensive (every Edit touches the whole file). Sharding lets the generator do one `Write` per shard, costing token-only proportional to that shard.
 
 The Phase 5 generator (`trip-html-generator`) emits an `app.js` matching this skeleton. The renderer functions are listed by name; their bodies follow the patterns shown in [layout-blueprint.md](layout-blueprint.md) and [html-content-sections.md](html-content-sections.md), but always read from `TRIP` and use `t(key)` — never inline strings.
 
 ```js
 // =============================================================
 // app.js — generic trip planner shell. NO trip-specific strings.
-// All copy, prices, cities, dates come from data/trip.json.
+// All copy, prices, cities, dates come from data/*.json shards.
 // =============================================================
 
 let TRIP = null;
@@ -28,15 +30,30 @@ async function bootstrap() {
   startCountdown();
 }
 
+// Load all data shards in parallel and merge into a single TRIP object.
+// Required shards must exist; optional ones default to safe empties.
 async function loadTrip() {
-  // Prefer external file; fall back to inline <script id="trip-data"> for file:// usage.
-  try {
-    const res = await fetch('data/trip.json', { cache: 'no-store' });
-    if (res.ok) return await res.json();
-  } catch (_) { /* fall through */ }
-  const inline = document.getElementById('trip-data');
-  if (!inline) throw new Error('trip data missing');
-  return JSON.parse(inline.textContent);
+  const required = ['trip.meta', 'pois', 'schedule', 'weather', 'budget', 'booking', 'checklist'];
+  const optional = ['flightIntel', 'entryRequirements', 'entryForms', 'holidays', 'retro'];
+  const fetchOne = async (name, isOptional) => {
+    try {
+      const res = await fetch(`data/${name}.json`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return [name, await res.json()];
+    } catch (e) {
+      if (isOptional) return [name, null];
+      throw new Error(`Required data shard data/${name}.json failed: ${e.message}`);
+    }
+  };
+  const reqs = required.map(n => fetchOne(n, false));
+  const opts = optional.map(n => fetchOne(n, true));
+  const all = await Promise.all([...reqs, ...opts]);
+  const trip = {};
+  for (const [name, val] of all) {
+    if (name === 'trip.meta') Object.assign(trip, val);   // meta merges at top level
+    else trip[name] = val;                                 // others as keyed shards
+  }
+  return trip;
 }
 
 function pickInitialLang(trip) {
@@ -56,7 +73,7 @@ function t(key) {
 const i18n = t;
 
 // L(value) — resolve a localized value to a plain string.
-// The trip.json contract: every user-visible field is a nested i18n object.
+// The trip data contract: every user-visible field is a nested i18n object.
 // Single-lang mode (default): { zh: "..." }   — one key, the user's lang.
 // Multi-lang mode (opt-in):   { zh: "...", en: "..." }   — multiple keys.
 // Bare strings are tolerated (returned as-is) but discouraged.
@@ -454,4 +471,4 @@ Renderers may add more keys as needed; if a key is missing, `t(key)` returns the
 
 ## Updating the trip = editing JSON only
 
-Once the skeleton is generated for a trip, the user (or the trip-planner skill in update mode) only edits `data/trip.json`. The HTML/CSS/JS shell is identical across every trip.
+Once the skeleton is generated for a trip, the user (or the `trip-mutator` skill) only edits the relevant `data/*.json` shard. The HTML/JS shell is identical across every trip — there is no `style.css`, all custom CSS lives in the `<style>` block inside `index.html`.

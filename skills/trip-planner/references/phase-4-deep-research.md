@@ -242,17 +242,29 @@ When **80% of POIs have price + hours + address + 1 booking source**, declare Ph
 
 This is a hard rule, not a guideline. **If you find yourself on the 4th search for a single POI, stop and tag the field as `check on arrival`.**
 
-### Mandatory progress reporting (every ~5 minutes during Phase 4)
+### Mandatory progress reporting + per-POI announcement
 
-Phase 4 is invisible to the user — they see nothing while you research 18 POIs. Output a brief status line every few searches so they know you're working, not stuck:
+Phase 4 is invisible to the user — they see nothing while you research 18 POIs. **Two mandatory observability rules**:
 
-> `Researching… 8/18 POIs done (avg 2.4 searches each), 22 searches used.`
+**1. Per-POI announcement.** Before researching each POI, output one line and stick to it:
 
-And at the end of Phase 4, output a self-audit line:
+```
+Researching p5 (Bondi Coastal Walk)...
+  Search 1/3: "bondi coogee walk price hours" → got hours, free
+  Search 2/3: "bondi coogee walk klook tour" → no booking platform sells this
+  ✓ Sufficient (2 searches used). Moving to p6.
+```
 
-> `Phase 4 complete. Used 47 searches across 18 POIs (avg 2.6 per POI, under the 3-per-POI ceiling). 16/18 fully populated; 2 marked "check on arrival".`
+This forces you to count your own searches per POI. If you find yourself typing "Search 4/3" you've blown the budget — stop and mark `"check on arrival"`.
 
-This audit is mandatory. Counting your own tool history forces you to notice if the budget is being blown.
+**2. Phase-end self-audit.** After all POIs done:
+
+```
+Phase 4 complete. Used 47 searches across 18 POIs (avg 2.6 per POI, under the 3-per-POI ceiling).
+16/18 fully populated; 2 marked "check on arrival".
+```
+
+This audit is mandatory. Counting your own tool history forces you to notice if the budget is being blown — and gives the user a concrete data point before approving Phase 5.
 
 ## Tutorial & Guide Language Rules
 

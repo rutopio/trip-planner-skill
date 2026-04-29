@@ -2,7 +2,7 @@
 
 The HTML structure: page shell, tab anatomy, design tokens, and the non-negotiable rules that survive every UI-style choice. Component-level rendering details (Today, Cover, Modal, Clocks, etc.) live in [components.md](components.md). CDN setup and styling policy live in [cdn-and-styling.md](cdn-and-styling.md). i18n rules live in [SKILL.md §Data Language Rule](../SKILL.md).
 
-> **Implementation note:** Layout/spacing/typography examples in this doc are *intent specs*. Actual implementation uses **Tailwind utility classes** in HTML wherever possible. Custom CSS in `style.css` is reserved for the narrow exceptions in [cdn-and-styling.md](cdn-and-styling.md).
+> **Implementation note:** Layout/spacing/typography examples in this doc are *intent specs*. Actual implementation uses **Tailwind utility classes** in HTML wherever possible. Custom CSS lives in the inline `<style>` block inside `index.html` — there is no separate `style.css` file. See [cdn-and-styling.md](cdn-and-styling.md).
 
 ---
 
@@ -68,7 +68,7 @@ Tab content rendering details live in [components.md](components.md) and [html-c
 }
 ```
 
-When the user opts into a different UI-style pack (after the trip is generated, see [phase-4_5-style-and-audit.md](../../trip-planner/references/phase-4_5-style-and-audit.md)), that pack overrides these tokens by rewriting `:root` in `style.css`. Swiss is the default because it pairs well with calendar/itinerary density.
+When the user opts into a different UI-style pack (after the trip is generated, see [phase-4_5-style-and-audit.md](../../trip-planner/references/phase-4_5-style-and-audit.md)), that pack overrides these tokens by rewriting the `:root { ... }` rule INSIDE the existing `<style>` block in `index.html`. Swiss is the default because it pairs well with calendar/itinerary density.
 
 Tailwind theme extension (in `<head>`, see [cdn-and-styling.md](cdn-and-styling.md)) re-exports these as `bg-paper`, `text-ink`, `bg-accent`, `rounded-DEFAULT`, `font-sans`. Use those utilities in markup; never hardcode hex values.
 
@@ -114,7 +114,7 @@ Tailwind theme extension (in `<head>`, see [cdn-and-styling.md](cdn-and-styling.
 | Tablet | `768–1024px` | Sidebar visible, calendar week view at narrower columns |
 | Desktop | `> 1024px` | Full sidebar, full calendar week view, side-by-side panels |
 
-Use Tailwind responsive utilities (`md:`, `lg:`) directly in markup. Avoid writing `@media` rules in style.css unless animating or print.
+Use Tailwind responsive utilities (`md:`, `lg:`) directly in markup. Avoid writing `@media` rules inside the `<style>` block unless animating or print.
 
 ---
 

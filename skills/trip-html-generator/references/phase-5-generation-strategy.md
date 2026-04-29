@@ -5,7 +5,9 @@ description: How to actually generate the trip files without timing out, truncat
 
 # Phase 5 Generation Strategy
 
-The Phase 5 deliverables (`trip.json` + `index.html` + `app.js` + `style.css`) total several thousand lines. Writing them in one shot causes timeouts, truncation, and unrecoverable mid-write failures. This document defines the **incremental, validated, resumable** generation flow that the generator MUST follow.
+The Phase 5 deliverables (`data/*.json` shards + `index.html` (with inline `<style>`) + `app.js`) total several thousand lines. Writing them in one shot causes timeouts, truncation, and unrecoverable mid-write failures. This document defines the **incremental, validated, resumable** generation flow that the generator MUST follow.
+
+**No separate `style.css`.** All custom CSS lives in a `<style>` block inside `index.html` — Tailwind CDN does the rest. See [cdn-and-styling.md](cdn-and-styling.md).
 
 ---
 
@@ -38,43 +40,78 @@ The output folder is determined by a single deterministic rule:
 
 ---
 
-## B. Build `trip.json` in 5 Sections (write → validate → continue)
+## B. Build Trip Data as Multi-File Shards (one `Write` per shard)
 
-`trip.json` is the largest single artifact and the source of truth. Build it section-by-section, writing the file after each section and re-running schema validation. This catches missing i18n keys early instead of after the whole pipeline.
+**Single-file `trip.json` was retired in 2026-04** because every `Edit` on a growing JSON file streamed the whole file through the LLM — costs scaled O(n²) with trip size. A single 800-line trip.json could burn 60k+ tokens just for B-step edits.
 
-### Section order
+The new layout shards trip data across `data/*.json`. Each shard is small, self-contained, and **written exactly once via `Write`** — no Edits, no patches, no token-cost compounding.
 
-| # | Section | Fields added | Validate after |
-|---|---------|--------------|----------------|
-| B1 | **Skeleton** | `lang`, `supportedLangs`, `destination`, `startDate`, `endDate`, `currency`, `cities[]`, empty `i18n{}`, `pois:[]`, `schedule:[]` | schema-only |
-| B2 | **i18n chrome** | `i18n.{lang}.{key}` for every required key — in **single-lang mode (default), only one lang block** | schema-only |
-| B3 | **POIs** | `pois[]` with full nested-i18n `name`/`desc`, `lat`, `lng`, `cat`, `city`, `addr` | schema-only |
-| B4 | **Schedule** | `schedule[]` with day-by-day events, restaurants, booking_urls | schema-only |
-| B5 | **Auxiliary** | `weather[]`, `budget`, `booking`, `entryForms`, `flightIntel`, `retro` | schema-only |
+### Shard files (under `data/`)
 
-After each section: run
+| # | File | Content | Required? |
+|---|------|---------|-----------|
+| B1 | `trip.meta.json` | `lang`, `supportedLangs`, `destination`, `tagline`, `startDate`, `endDate`, `currency`, `cities[]`, `i18n` | ✅ |
+| B2 | `pois.json` | `[ { id, name, nameLocal, desc, addr, city, cat, lat, lng, ... } ]` | ✅ |
+| B3 | `schedule.json` | `[ { date, city, events: [...] } ]` | ✅ |
+| B4 | `weather.json` | `[ { date, city, icon, high, low, ... } ]` | ✅ |
+| B5 | `budget.json` | `{ items: [...], actual_expenses: [] }` | ✅ |
+| B6 | `booking.json` | `{ purchased: [...], compare: [...], passes: [...], recommended: [...] }` | ✅ |
+| B7 | `checklist.json` | `[ { title, items: [...] } ]` | ✅ |
+| B8 | `flightIntel.json` | flight price intelligence (see flight-intelligence skill) | optional |
+| B9 | `entryRequirements.json` + `entryForms.json` + `holidays.json` + `retro.json` | misc | optional |
+
+### Build order
+
+1. **B1 — `trip.meta.json`** first. Contains `cities[]` so B2/B3 can reference city ids without dangling.
+2. **B2 — `pois.json`**. Contains POI ids that B3 events will reference.
+3. **B3 — `schedule.json`**.
+4. **B4–B7** in any order (no inter-shard refs).
+5. **B8–B9** for whatever applies to this trip; skip the rest.
+
+### How to write each shard
+
+Each shard is **one `Write` call** — never `Edit` a shard once written. If you discover a missing field after B5 is written, **rewrite the entire shard** with `Write` (still cheap because each shard is small).
+
+Example B2 (POIs):
+
+```bash
+# Write the whole pois.json once. Token cost ∝ POI count, not trip size.
+```
+
+```jsonc
+// data/pois.json — this entire file is the Write payload
+[
+  { "id": "p1", "name": { "zh": "雪梨歌劇院" }, "nameLocal": { "zh": "Sydney Opera House" },
+    "desc": { "zh": "..." }, "addr": { "zh": "Bennelong Point" },
+    "city": "sydney", "cat": "attraction", "lat": -33.8568, "lng": 151.2153,
+    "icon": "theater_comedy", "price_local": 49, "currency": "AUD" },
+  { "id": "p2", ... },
+  ...
+]
+```
+
+After each shard write: run schema-only validator to catch shape errors immediately:
 
 ```bash
 node skills/trip-html-generator/scripts/validate-trip.mjs <trip-folder> --schema-only
 ```
 
-`--schema-only` skips all HTML/CSS/JS checks (those files don't exist yet). Fix any errors before moving to the next section. **Never proceed past a failing section** — partial trip.json + downstream HTML compounds the cost of recovery.
+The validator merges all shards in memory and checks the combined object against the schema. If a B-step fails, **fix and re-Write that shard** (still one call, no compounding cost).
 
-### Why this order
+### Single-Write hard ceiling: 500 lines
 
-- B1 first: gives validator the `cities[]` list so B3/B4 can reference cities by id without dangling references.
-- B2 before any rendering content: every visible POI/schedule/budget label has to map through `t(key)` in `app.js`; if `i18n` is incomplete the renderer will crash silently.
-- B3 before B4: `schedule[].events[]` references POI ids; building POIs first means schedule writes don't introduce orphan ids.
+If any single shard would exceed 500 lines, **split the array across two files** with a numeric suffix:
 
-### Sub-batching for big trips
+- `pois.json` + `pois.2.json` (loader concatenates `[...arr1, ...arr2]`)
+- Loader logic lives in `app-skeleton.md → loadTrip()`. If you add a `.2.json` shard, also patch the loader to fetch it.
 
-If any single B-section would exceed **500 lines** of new content, split it:
+But in practice: **20 POIs ≈ 250 lines, 14-day schedule ≈ 300 lines.** Most trips fit in one shard each. Splitting is rare.
 
-- **B3 with > 10 POIs** → B3a, B3b, B3c, … each adds 5 POIs. Use `Edit` with `old_string` = `"pois": [` (or the closing `]`) for surgical insertion.
-- **B4 with > 7 days** → B4a, B4b, … each adds 3 days of schedule.
-- **B5** → can stay as one section if `weather[] + budget + booking + entryForms + retro` fits under 500 lines combined; otherwise split per-field.
+### Progress reporting after each shard
 
-Update `_progress.phase5_step` to the sub-letter (`"B3a"`, `"B3b"`, …) and run schema-only validator after each sub-batch.
+Output a one-line ping after each shard write + validator pass:
+
+> `✅ B2 done — pois.json (15 entries, 230 lines). Validator green. → Starting B3: schedule...`
 
 ---
 
@@ -110,19 +147,20 @@ After each group: do NOT run validator (it requires `index.html` to exist). Just
 
 ---
 
-## D. Build `index.html` and `style.css` Last
+## D. Build `index.html` Last (no style.css, no JSON inlining)
 
-1. **`index.html`** — copy from `index-skeleton.md` verbatim. The skeleton already includes the three CDN tags (Tailwind + Leaflet + Google Fonts) and Tailwind theme config. **Leave `__TRIP_JSON__` as the literal placeholder during the Write call** — do NOT inline the JSON into the Write payload (that bloats it by thousands of lines and slows the call to a crawl).
-2. **Substitute the JSON afterwards** via Python (binary-safe with multibyte CJK):
-   ```bash
-   cd "<folder>" && python3 -c "
-   import pathlib
-   d = pathlib.Path('data/trip.json').read_text()
-   h = pathlib.Path('index.html').read_text()
-   pathlib.Path('index.html').write_text(h.replace('__TRIP_JSON__', d))
-   "
-   ```
-3. **`style.css`** — minimal. Tailwind handles 90% of styling via CDN. Custom CSS only for the exceptions documented in [cdn-and-styling.md](cdn-and-styling.md) (CSS variables, Leaflet overrides, animations, calendar grid math, UI-style pack specifics). **Target: 50–200 lines.** If you exceed 400, audit and convert to Tailwind classes.
+1. **`index.html`** — copy from `index-skeleton.md` verbatim. The skeleton already includes:
+   - 3 CDN tags (Tailwind + Leaflet + Google Fonts)
+   - Tailwind theme config in `<script>tailwind.config = ...</script>`
+   - **Inline `<style>` block** with CSS variables, calendar absolute-positioning math, Leaflet overrides, animations, print rules. **This replaces what used to be a separate style.css file.**
+   - All mount points (sidebar, bottom-bar, 7 tab sections, modal/cover/today overlays)
+
+   No trip data inlined. `app.js → loadTrip()` fetches shards at runtime. Single `Write` call (~250 lines including `<style>`).
+
+2. **Do NOT write a separate `style.css` file.** The skeleton's inline `<style>` block is the only place for custom CSS. If a UI-style pack needs different design tokens, edit the `:root { ... }` rule INSIDE the existing `<style>` block.
+
+3. **`serve.py` is mandatory.** `file://` is no longer supported (sharded `fetch` requires HTTP). Tell the user: `python3 serve.py` → `http://localhost:8765`.
+
 4. **Run full validator** (no `--schema-only`):
    ```bash
    node skills/trip-html-generator/scripts/validate-trip.mjs <trip-folder>
@@ -133,15 +171,15 @@ After each group: do NOT run validator (it requires `index.html` to exist). Just
 
 ## E. Checkpoint & Resume (mid-Phase-5)
 
-Phase 5 is long enough to time out mid-section. Track progress in `data/trip.json._progress` using the **single canonical schema defined in [trip-planner/references/checkpoint.md](../../trip-planner/references/checkpoint.md)**.
+Phase 5 is long enough to time out mid-section. Track progress in `data/trip.meta.json._progress` (the meta shard is the most stable shard — schema in [trip-planner/references/checkpoint.md](../../trip-planner/references/checkpoint.md)).
 
-After each section/group completes, update `_progress.phase5_step` to the **just-finished** step (`B1`/`B2`/`B3`/`B4`/`B5`/`C1`...`C8`/`D`). Also update `_progress.updated_at`. On resume:
+After each shard/group completes, update `_progress.phase5_step` to the **just-finished** step (`B1`–`B9`/`C1`–`C8`/`D`). Also update `_progress.updated_at`. On resume:
 
-1. Read `_progress.phase5_step`.
+1. Read `data/trip.meta.json._progress.phase5_step`.
 2. Resume at the next step (e.g., `B3` finished → continue at `B4`).
-3. Do NOT re-write earlier sections — they're already in the file.
+3. Do NOT re-Write earlier shards — they're already on disk.
 
-When the full validator passes in step D, you may delete `_progress` or leave it (template ignores unknown fields).
+When the full validator passes in step D, you may delete `_progress` from `trip.meta.json` or leave it (the loader and template both ignore unknown top-level fields).
 
 ---
 
@@ -152,7 +190,7 @@ When the full validator passes in step D, you may delete `_progress` or leave it
 - [ ] B1–B5 written incrementally, `--schema-only` validator green after each
 - [ ] `_progress.phase5_step` updated after each section/group
 - [ ] C1–C8 appended via Edit, not full Write rewrites
-- [ ] `index.html` + `style.css` generated last
+- [ ] `index.html` (with inline `<style>` block, no separate style.css) generated last
 - [ ] Full validator exits 0
 - [ ] `_progress` removed (or accepted as harmless residue)
 - [ ] Tell user the absolute folder path + `python3 serve.py` command

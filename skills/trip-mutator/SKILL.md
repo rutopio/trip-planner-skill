@@ -2,7 +2,7 @@
 name: trip-mutator
 description: >
   Modify an existing trip plan WITHOUT regenerating from scratch. Use when the user has a generated
-  trip folder (data/trip.json + index.html + app.js + style.css) and wants to change something:
+  trip folder (data/*.json shards + index.html + app.js + style.css) and wants to change something:
   swap POIs, change dates, add/remove a day, change accommodation, update budget, mark expenses as
   spent, swap days due to weather, etc. Triggers on phrases like "change my trip to X", "swap day 3
   with day 5", "I want to add Y", "remove Z from my trip", "I spent $50 on lunch", "the weather
@@ -13,9 +13,21 @@ description: >
 
 # Trip Mutator — Surgical Updates to an Existing Trip Plan
 
-Modify a generated trip plan **without** running the full Phase 0–5 flow again. The HTML/CSS/JS template never changes; only `data/trip.json` is edited. Re-rendering is automatic on page reload.
+Modify a generated trip plan **without** running the full Phase 0–5 flow again. The HTML/CSS/JS template never changes; only the relevant `data/*.json` shard(s) get edited. Re-rendering is automatic on page reload.
 
-**Core insight:** the template contract guarantees `index.html` / `app.js` / `style.css` contain ZERO trip-specific data. Therefore a trip change = a `trip.json` edit + revalidate. Nothing else.
+**Core insight:** the template contract guarantees `index.html` / `app.js` / `style.css` contain ZERO trip-specific data. Therefore a trip change = editing one or two specific shards + revalidate. The sharded layout makes mutations much cheaper than the old single-`trip.json` flow because you only touch the shard you're mutating.
+
+**Shard map (which file to edit for which mutation):**
+
+| Mutation | Shard to edit |
+|----------|---------------|
+| Add/remove/swap POI | `data/pois.json` (and maybe `data/schedule.json` if event references it) |
+| Swap days, change dates, add/remove a day | `data/schedule.json` (and maybe `data/weather.json`) |
+| Log actual expense | `data/budget.json` (append to `actual_expenses[]`) |
+| Update accommodation booking | `data/booking.json` |
+| Update flight | `data/booking.json` (or `data/flightIntel.json`) |
+| Update i18n / lang | `data/trip.meta.json` |
+| Add/remove city | `data/trip.meta.json` (`cities[]`) |
 
 ---
 
@@ -24,13 +36,13 @@ Modify a generated trip plan **without** running the full Phase 0–5 flow again
 | User says | Use |
 |-----------|-----|
 | "Plan a trip to Tokyo" | `trip-planner` (no existing files) |
-| "Add Senso-ji to my trip" | `trip-mutator` (existing trip.json) |
+| "Add Senso-ji to my trip" | `trip-mutator` (existing data/*.json) |
 | "Change my Tokyo trip to start a week later" | `trip-mutator` |
 | "Swap day 2 and day 5 because of rain" | `trip-mutator` |
 | "I just spent ¥1500 on lunch" | `trip-mutator` (logs actual expense) |
 | "Generate the HTML for my plan" | `trip-html-generator` |
 
-If `data/trip.json` does NOT exist in cwd or any sibling folder, fall back to `trip-planner`.
+If neither `data/trip.meta.json` nor a legacy `data/trip.json` exists in cwd or any sibling folder, fall back to `trip-planner`.
 
 ---
 
@@ -41,14 +53,14 @@ If `data/trip.json` does NOT exist in cwd or any sibling folder, fall back to `t
 **Before doing anything else — before responding, before reading other files, before asking the user any question — you MUST run this command:**
 
 ```bash
-find . -maxdepth 3 -path '*/data/trip.json' 2>/dev/null | head -5
+find . -maxdepth 3 \( -path '*/data/trip.meta.json' -o -path '*/data/trip.json' \) 2>/dev/null | head -5
 ```
 
 This is non-negotiable. Do not skip this step. Do not guess the folder from chat history. Do not assume "the trip folder is probably named X". The trip folder name is NOT predictable from the user's message — they may have multiple trips in cwd, may have renamed folders, may be in a different cwd than last session.
 
 **Interpret the result:**
 
-- **0 results** → No trip plan exists. Stop the mutation flow. Tell the user: "I don't see an existing `data/trip.json` in this directory. Did you mean to start a new plan? (I can hand off to `trip-planner`.)" Do NOT fabricate a folder.
+- **0 results** → No trip plan exists. Stop the mutation flow. Tell the user: "I don't see an existing trip data folder (`data/trip.meta.json` or legacy `data/trip.json`) in this directory. Did you mean to start a new plan? (I can hand off to `trip-planner`.)" Do NOT fabricate a folder.
 - **1 result** → Use that folder. Echo the absolute path back to the user in one line: "Editing `<abs-path>`."
 - **2+ results** → Invoke `AskUserQuestion` with the folder list. Do NOT guess based on the trip name in the user's message — they may have ambiguous names (`tokyo-2026/` and `tokyo-2027/`). Always ask.
 
@@ -87,20 +99,23 @@ shift-dates:  warn if old weather data is now stale ("dates moved >2 weeks; weat
 
 Show the recommendation but **don't override the user**. They get final say.
 
-### Step 4 — Edit `trip.json` (atomic)
+### Step 4 — Edit the right shard(s)
 
-**Do NOT regenerate the file from scratch.** Use `Edit` tool for surgical changes:
+**Identify which shard(s) the mutation touches** (see Shard map above). Most mutations touch ONE shard. Some (POI add → both `pois.json` and `schedule.json`) touch two.
 
-```
-Read data/trip.json once (jq or Read tool)
-For each affected field: use Edit with old_string / new_string
-Preserve all other fields verbatim
-```
+**For each affected shard, prefer one of these in order:**
 
-Common patterns:
-- Adding a POI: find `"pois": [` and append before `]`
-- Renumbering days: a sequence of small Edits (`"day": 4` → `"day": 3`, etc.) is safer than full rewrite
-- For complex multi-field swaps, write to `data/trip.json.tmp` and rename only after validator passes
+1. **`Write` the whole shard fresh.** If the shard is small (< 200 lines, e.g. `budget.json`, `weather.json`) and you're changing several fields, just rewrite it. Single `Write`, no Edit-on-large-file token cost.
+
+2. **`Edit` for surgical changes.** When you only need to flip one value (e.g. `purchased: false` → `true`), `Edit` with precise `old_string`/`new_string` is fine. Acceptable on shards under ~300 lines.
+
+3. **`Edit` for array append.** Inserting a POI: find the closing `]` of the `pois.json` array, replace with `,\n{ ...new POI... }\n]`.
+
+**Avoid:** trying to do everything in one giant Edit on the largest shard. The whole point of sharding is each file is small enough to handle freely.
+
+**Renumbering days:** safer to `Write` the whole `schedule.json` fresh than to chain many small Edits.
+
+**For multi-shard mutations** (e.g. add new city = `trip.meta.json` for cities[] AND `pois.json` for new POIs in that city), do them in dependency order: the referenced shard first (`trip.meta.json`), then the referencing shard.
 
 ### Step 5 — Re-validate
 

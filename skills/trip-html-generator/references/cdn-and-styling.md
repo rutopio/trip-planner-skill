@@ -33,42 +33,51 @@ Use these exact URLs and versions. Do NOT pin Tailwind to an older CDN — `cdn.
 
 ## Styling Decision Tree
 
+**No external `style.css`.** The generated trip folder does NOT contain a `style.css` file. All custom CSS is inlined in a `<style>` block inside `index.html` (already present in the canonical `index-skeleton.md`).
+
 For every visual element, ask in this order:
 
 ```
-1. Can a Tailwind utility do it?           → use Tailwind class
-2. Is it design-token-driven (color, font, → use CSS variable in <style> root
-   spacing, radius)?
-3. Is it style-pack specific (the chosen   → write minimal CSS in style.css
-   Phase-4.5 UI style)?
+1. Can a Tailwind utility do it?           → use Tailwind class in HTML
+2. Is it design-token-driven (color, font, → use the CSS variable already
+   spacing, radius)?                          declared in :root (e.g. var(--accent))
+3. Is it style-pack specific (the chosen   → override CSS variables in :root via
+   Phase-4.5 UI style)?                       the same <style> block in index.html
 4. Otherwise                               → DO NOT write CSS
 ```
 
-**Default to Tailwind.** If you find yourself writing more than 5 lines of `style.css` for a single component, stop and ask: "could Tailwind classes do this?"
+**Default to Tailwind classes.** Custom CSS only exists in the small `<style>` block already in `index-skeleton.md` — do NOT extend that block unless you genuinely hit one of the exceptions below.
 
 ---
 
-## When You MUST Write Custom CSS (the only exceptions)
+## What Lives in the `<style>` Block (and only here)
 
-`style.css` is allowed to contain:
+The `<style>` block in `index.html` (provided verbatim by `index-skeleton.md`) contains exactly:
 
-1. **Tailwind config** — extending the theme via `<script>tailwind.config = { theme: { extend: { ... } } }</script>` in `<head>` (this lives in HTML, not style.css, but counts as theme setup).
-2. **CSS variables** in `:root` — design tokens: `--text`, `--bg`, `--accent`, `--city-color`, `--font`, `--r` (radius), spacing scale. The Phase 5 generator emits these from the chosen UI style.
-3. **Component CSS that Tailwind genuinely cannot do**:
-   - Leaflet popup overrides (`.leaflet-popup-content`, etc.) — Tailwind can't reach into Leaflet's DOM
-   - Custom animations / `@keyframes` — Tailwind has some, but trip-specific (cover slide-up, today slide-down, now-line pulse) are bespoke
-   - `@media print` rules for the print-friendly mode
-   - Pure-CSS bar charts (the budget breakdown bars) — needs precise `width: var(--pct)` calculations
-   - Calendar grid time-slot positioning (60px/hour math, now-line absolute positioning)
-4. **The chosen UI style pack's distinctive treatment** — e.g., neo-brutalism's hard shadows, neumorphism's inset shadows, terminal's CRT scanlines. The `ui-style` skill provides the CSS to copy.
+1. **CSS variables** in `:root` — design tokens (`--bg`, `--text`, `--accent`, `--r`, `--font`, `--city-color`, etc.). The UI-style pack overrides these by emitting a fresh `:root { ... }` rule.
+2. **Calendar absolute-positioning math** — the 60px/hour grid, now-line indicator. Tailwind can't do `top: calc(60px * var(--n))`.
+3. **Cover/Today overlay transitions** — `transform: translateY(-100vh)` with `transition`. Bespoke trip animations.
+4. **Leaflet overrides** — `.leaflet-popup-content`, `.leaflet-container { font-family }`. Tailwind can't reach Leaflet's internal DOM.
+5. **`@media print`** — hides nav/buttons for print-friendly mode.
+6. **Pure-CSS horizontal bar chart** — `.h-bar { width: var(--pct) }`. Needs CSS variables, not Tailwind utilities.
 
-That's it. **Everything else is Tailwind.**
+That's it. Everything else uses Tailwind utilities directly in HTML markup.
+
+---
+
+## UI-Style Pack Application (no separate file)
+
+When the user picks a UI style (e.g. Botanical, Luxury Editorial), the generator does NOT write a `style.css`. Instead it modifies the existing `<style>` block in `index.html`:
+
+1. **Override CSS variables** — replace the `:root { --r, --bg, --accent, ... }` values with the style pack's tokens.
+2. **Override Tailwind config** — replace the `tailwind.config = { ... }` script block in `<head>` with the style pack's `theme.extend`.
+3. **Append style-pack signature CSS** — neo-brutalism's hard shadows, neumorphism's inset shadows, etc. — at the END of the `<style>` block. Keep this minimal (under 50 lines).
 
 ---
 
 ## Forbidden Custom-CSS Patterns
 
-Stop writing CSS for these — Tailwind handles them all:
+Stop writing CSS for these — Tailwind handles them all in HTML markup:
 
 - ❌ Padding, margin, gap (`.p-4`, `.mx-auto`, `.gap-3`)
 - ❌ Flexbox / grid layout (`.flex items-center justify-between`, `.grid grid-cols-3`)
@@ -80,7 +89,7 @@ Stop writing CSS for these — Tailwind handles them all:
 - ❌ Standard shadows (`.shadow-md shadow-lg`)
 - ❌ Color utilities (`.bg-white text-slate-900`)
 
-If your `style.css` contains any of these patterns, delete that block and convert to Tailwind classes in HTML.
+**If a generated trip contains a `style.css` file at all, that's a bug.** Delete the file and either move the content into the `<style>` block or convert to Tailwind utilities.
 
 ---
 
@@ -150,9 +159,9 @@ Targets (rough — UI style packs vary):
 
 | File | Typical | Red flag |
 |------|---------|----------|
-| `index.html` | 200–400 lines | > 600 lines suggests inline data leakage |
-| `app.js` | 1500–3000 lines | > 4000 lines suggests render redundancy |
-| `style.css` | **50–200 lines** | **> 400 lines means you're not using Tailwind enough** |
-| `data/trip.json` | 1500–4000 lines | depends on trip length |
+| `index.html` | 220–280 lines (incl. ~60-line `<style>` block) | > 400 lines → inline trip data or runaway custom CSS |
+| `app.js` | 1500–3000 lines | > 4000 lines → render redundancy |
+| `data/*.json` shards (combined) | 1500–4000 lines | depends on trip length |
+| `style.css` | **DOES NOT EXIST** | **Any `style.css` file is a bug — move content into the `<style>` block in index.html** |
 
-If `style.css` exceeds 400 lines, audit it: most likely you wrote utility CSS that should be Tailwind classes in the HTML.
+If the `<style>` block inside `index.html` exceeds 200 lines, audit it: most likely you wrote utility CSS that should be Tailwind utilities in the markup instead.

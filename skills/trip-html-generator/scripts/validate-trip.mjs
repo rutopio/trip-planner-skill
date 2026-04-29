@@ -83,20 +83,85 @@ function readJSON(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
+// Multi-file split layout (since 2026-04 to fix Phase 5 token cost):
+// trip data is sharded into multiple files under data/. The "trip" object
+// returned by loadTrip() is the runtime-merged form — this is what the
+// renderer also assembles via Promise.all in bootstrap().
+const SHARD_FILES = [
+  'trip.meta.json',  // lang, supportedLangs, destination, dates, currency, cities, i18n, tagline
+  'pois.json',       // []
+  'schedule.json',   // []
+  'weather.json',    // []
+  'budget.json',     // { items, actual_expenses }
+  'booking.json',    // { purchased, compare, passes, recommended }
+  'checklist.json',  // []
+  'flightIntel.json',
+  'entryRequirements.json',
+  'entryForms.json',
+  'holidays.json',
+  'retro.json',
+];
+
+function loadTrip(root, r) {
+  // Multi-file (preferred). All shard files must exist and parse.
+  const dataDir = join(root, 'data');
+  if (!existsSync(dataDir)) {
+    r.err('files', `missing data/ directory at ${dataDir}`);
+    return null;
+  }
+  const merged = {};
+  let metaFound = false;
+  for (const fname of SHARD_FILES) {
+    const p = join(dataDir, fname);
+    if (!existsSync(p)) {
+      // Each shard is required EXCEPT optional ones (retro, flightIntel, holidays
+      // can be empty placeholders {} or null in trip.meta.json instead). Allow
+      // missing for those.
+      const optional = ['flightIntel.json', 'holidays.json', 'retro.json', 'entryRequirements.json', 'entryForms.json'];
+      if (!optional.includes(fname)) {
+        r.err('files', `missing: data/${fname}`);
+      }
+      continue;
+    }
+    let parsed;
+    try { parsed = readJSON(p); }
+    catch (e) {
+      r.err('schema', `data/${fname} is not valid JSON: ${e.message}`);
+      continue;
+    }
+    if (fname === 'trip.meta.json') {
+      Object.assign(merged, parsed);
+      metaFound = true;
+    } else {
+      // Shard key = filename minus .json
+      const key = fname.replace(/\.json$/, '');
+      merged[key] = parsed;
+    }
+  }
+  if (!metaFound) return null;
+  return merged;
+}
+
 function checkRequiredFiles(root, r) {
-  const required = ['index.html', 'style.css', 'app.js', 'data/trip.json'];
+  const required = ['index.html', 'app.js'];
   for (const rel of required) {
     const p = join(root, rel);
     if (!existsSync(p) || !statSync(p).isFile()) {
       r.err('files', `missing: ${rel}`);
     }
   }
+  // style.css must NOT exist — all custom CSS lives in <style> inside index.html.
+  const styleCssPath = join(root, 'style.css');
+  if (existsSync(styleCssPath)) {
+    r.err('no-style-css', `style.css must not exist — inline custom CSS into the <style> block in index.html instead. See cdn-and-styling.md.`);
+  }
+  // data/ shard files checked in loadTrip() — see SHARD_FILES.
 }
 
 function checkTripShape(trip, r) {
   const required = ['lang', 'supportedLangs', 'destination', 'startDate', 'endDate', 'currency', 'cities', 'i18n', 'pois', 'schedule'];
   for (const k of required) {
-    if (!(k in trip)) r.err('schema', `trip.json missing top-level field: ${k}`);
+    if (!(k in trip)) r.err('schema', `trip data missing top-level field: ${k} (check data/trip.meta.json + matching shard file)`);
   }
   if (trip.supportedLangs && !trip.supportedLangs.includes(trip.lang)) {
     r.err('schema', `trip.lang "${trip.lang}" not in supportedLangs`);
@@ -185,40 +250,31 @@ function buildForbiddenTokenList(trip) {
 
 function checkShellHasNoTripStrings(root, trip, r) {
   const tokens = buildForbiddenTokenList(trip);
-  const files = ['index.html', 'app.js', 'style.css'];
+  const files = ['index.html', 'app.js'];   // style.css does not exist anymore
   for (const f of files) {
     const path = join(root, f);
     if (!existsSync(path)) continue;
     const src = readFileSync(path, 'utf8');
     for (const tok of tokens) {
       if (src.includes(tok)) {
-        // index.html allows the inline trip-data <script> which carries the JSON verbatim;
-        // a hit there is OK if the surrounding context is the script tag.
-        if (f === 'index.html' && isInsideTripDataScript(src, tok)) continue;
         r.err('no-trip-strings', `${f} contains trip-specific token: ${JSON.stringify(tok)}`);
       }
     }
   }
 }
 
-function isInsideTripDataScript(src, token) {
-  const open = src.indexOf('<script id="trip-data"');
-  if (open < 0) return false;
-  const start = src.indexOf('>', open) + 1;
-  const end = src.indexOf('</script>', start);
-  if (end < 0) return false;
-  const block = src.slice(start, end);
-  return block.includes(token);
-}
-
 function checkNoPerCitySelectors(root, trip, r) {
-  const cssPath = join(root, 'style.css');
-  if (!existsSync(cssPath)) return;
-  const css = readFileSync(cssPath, 'utf8');
+  // CSS lives inline in index.html <style> block. Check there.
+  const indexPath = join(root, 'index.html');
+  if (!existsSync(indexPath)) return;
+  const html = readFileSync(indexPath, 'utf8');
+  const styleMatch = html.match(/<style\b[^>]*>([\s\S]*?)<\/style>/i);
+  if (!styleMatch) return;
+  const css = styleMatch[1];
   for (const c of trip.cities || []) {
     const re = new RegExp(`\\.[a-zA-Z-]*${escapeRegex(c.id)}\\b`);
     if (re.test(css)) {
-      r.err('no-per-city-css', `style.css contains a per-city selector for "${c.id}"`);
+      r.err('no-per-city-css', `index.html <style> block contains a per-city selector for "${c.id}"`);
     }
   }
 }
@@ -389,8 +445,8 @@ const schemaOnly = flags.has('--schema-only');
 const folder = args[0];
 if (!folder) {
   console.error('usage: node validate-trip.mjs <trip-folder> [--schema-only]');
-  console.error('  --schema-only: validate data/trip.json shape + i18n only (skip HTML/CSS/JS checks).');
-  console.error('                 Use this mid-generation, before index.html/app.js/style.css are written.');
+  console.error('  --schema-only: validate data/*.json shards (shape + i18n + city refs) only — skip HTML/JS checks.');
+  console.error('                 Use this mid-generation, before index.html/app.js are written.');
   exit(2);
 }
 const root = resolve(folder);
@@ -400,14 +456,7 @@ if (!schemaOnly) {
   checkRequiredFiles(root, r);
 }
 
-let trip = null;
-const tripPath = join(root, 'data/trip.json');
-if (existsSync(tripPath)) {
-  try { trip = readJSON(tripPath); }
-  catch (e) { r.err('schema', `data/trip.json is not valid JSON: ${e.message}`); }
-} else if (schemaOnly) {
-  r.err('files', `missing: data/trip.json (required for --schema-only)`);
-}
+const trip = loadTrip(root, r);
 
 if (trip) {
   checkTripShape(trip, r);

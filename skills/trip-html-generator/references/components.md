@@ -7,7 +7,7 @@ description: Per-component rendering rules (Cover, Today, Weather, Modal, Clocks
 
 This document is the source of truth for **how each interactive UI piece behaves**. SKILL.md references it for component specifics; SKILL.md itself stays high-level.
 
-All data lives in `data/trip.json`. **No component may hardcode trip data into `app.js`.** When this doc shows a JS array (e.g. `WEATHER_DATA`), that's just for the renderer's internal cache — the source is always `TRIP.weather`, `TRIP.pois`, etc.
+All data lives in `data/*.json` shards (loaded into a merged `TRIP` object at runtime). **No component may hardcode trip data into `app.js`.** When this doc shows a JS array (e.g. `WEATHER_DATA`), that's just for the renderer's internal cache — the source is always `TRIP.weather`, `TRIP.pois`, etc.
 
 ---
 
@@ -61,7 +61,7 @@ Full-screen entry overlay. Slides up to reveal main app.
 - On load, set `cover-bg` background-image from localStorage if present, else gradient.
 - Dismiss: add `.cover-hidden` class (CSS: `transform: translateY(-100vh); transition: 0.6s ease;`).
 
-**Tailwind-first**: most layout uses Tailwind. The slide-up transition needs a `@keyframes` or transition rule in style.css — that's an allowed exception.
+**Tailwind-first**: most layout uses Tailwind. The slide-up transition needs a `transition` rule in the inline `<style>` block in `index.html` — already provided by the canonical skeleton.
 
 ---
 
@@ -159,7 +159,7 @@ var getEvIcon = function(ev) {
 ### Weather data lives in `TRIP.weather` (NOT in app.js)
 
 ```json
-// trip.json
+// data/weather.json (loaded into TRIP.weather)
 "weather": [
   {
     "date": "2026-03-30",
@@ -303,7 +303,7 @@ Red horizontal line + time label on today's column.
 **Desktop:** absolute-positioned line + label inside the today `.cal-day-col`.
 **Mobile:** now-indicator inside `.cal-m-events`.
 
-CSS (style.css — exception, can't be Tailwind):
+CSS (in the `<style>` block in `index.html` — exception, can't be Tailwind):
 ```css
 .cal-now-line {
   position: absolute; left: 0; right: 0; height: 2px;
