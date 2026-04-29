@@ -38,14 +38,30 @@ Generate a trip planner app as a **multi-file folder structure** (`index.html` +
 
 **Phase 5 is incremental. Generating in one shot causes 15+ minute timeouts and silent failures. This is the rule, not a suggestion.**
 
-### Hard limits (the validator and your own size sense both enforce these)
+### Hard limits (single Write/Edit per call must obey these)
 
-| File | One-shot Write OK? | Hard ceiling per Write/Edit | Strategy |
-|------|---------------------|------------------------------|----------|
-| `data/trip.json` | ❌ Never | ~400 lines per section | 5 sections (B1–B5), `Write` once for B1, then `Edit` to append per section |
-| `app.js` | ❌ Never | **800 lines per call** | 8 function groups (C1–C8), `Write` once for C1, then `Edit` append per group. **If a single Write/Edit exceeds 800 lines you're doing it wrong — split it.** |
-| `index.html` | ✅ Once | ~400 lines | Copy `index-skeleton.md` verbatim, fill `__TRIP_JSON__` |
+**Universal ceiling: any single `Write` or `Edit` call MUST stay under 500 lines of new content.** Above 500 lines a single tool call takes 1–4 minutes to complete, and the user sees a spinner with no progress. Many small calls feel faster than one big call, even when total time is identical.
+
+| File | One-shot Write OK? | Per-call ceiling | Strategy |
+|------|---------------------|-------------------|----------|
+| `data/trip.json` | ❌ Never | **500 lines per section** | 5 sections (B1–B5). For B3 with > 10 POIs, split into B3a/B3b/... — 5 POIs per Edit max. For B4 with > 7 days, split per-3-days. |
+| `app.js` | ❌ Never | **500 lines per group** | 8 function groups (C1–C8). C1 is `Write`; C2–C8 use **shell append** (see below). If a render group exceeds 500 lines, split into C5a/C5b/etc. |
+| `index.html` | ✅ Once | ~400 lines | Copy `index-skeleton.md` verbatim. **Do NOT inline the trip.json into the HTML during Write** — substitute via `sed` after writing (see Step 4). |
 | `style.css` | ✅ Once | ~200 lines | Mostly empty — Tailwind handles 90% |
+
+### Append vs Edit — use shell append for app.js
+
+For C2–C8, do NOT use the `Edit` tool to grow `app.js`. Edit recomputes string positions on a growing file and gets slow. Use `Bash` with heredoc append:
+
+```bash
+cat >> "<folder>/app.js" << 'EOF'
+function renderCalendar() {
+  /* ... C3 body ... */
+}
+EOF
+```
+
+This is O(1) regardless of file size. Same applies to growing `trip.json` mid-build via `jq` patches if needed; but for `trip.json` the cleaner path is `Edit` with surgical insertions because the append point is inside arrays (`pois`, `schedule`).
 
 ### Required sequence (do not deviate)
 
@@ -67,18 +83,30 @@ After EACH B-step:
 1. Update `_progress.phase5_step = "B<N>"` and `_progress.updated_at`
 2. Run `node skills/trip-html-generator/scripts/validate-trip.mjs <folder> --schema-only`
 3. **If validator fails, fix and re-run before moving on.** Do not proceed with cascading errors.
+4. **Output a one-line progress message to the user.** Mandatory. Format: `✅ B<N> done — {what was added} ({line count}). Validator green. → Starting B<N+1>: {next thing}...`. This 1–2 sentence ping every 1–3 minutes prevents the user thinking the run is frozen during long generations.
 
 **Step 3 — Execute C1 → C8** (build `app.js`).
 - C1: `Write` the entire bootstrap (`bootstrap`, `t()`, `L()`, `cityById()`, `bindLanguageSwitcher`, `bindTabs`, `showTab`, `applyLang`, `fmtMoney`, `injectCityVars`) — this is the only `Write` for app.js.
-- C2–C8: each is an `Edit` that appends one render group to the END of app.js. Use `old_string` = the last few lines currently in the file, `new_string` = those same lines + the new group.
-- **Never re-`Write` app.js after C1.** Edit-append only.
-- **No single C-step Edit may exceed 800 lines of new code.** If a render group is bigger, split it into C2a/C2b.
+- C2–C8: each appends one render group via **shell `cat >> ... << 'EOF'`**, NOT via `Edit`. See "Append vs Edit" above for syntax.
+- **Never re-`Write` app.js after C1.** Append only.
+- **No single C-step append may exceed 500 lines of new code.** If a render group is bigger, split into C5a/C5b/etc.
 - Update `_progress.phase5_step = "C<N>"` after each.
+- Output progress: `✅ C<N> done — {functions added} ({line count}). → Starting C<N+1>...`
 
 **Step 4 — D (index.html + style.css).**
-- Copy `index-skeleton.md` verbatim → `index.html`. Replace `__TRIP_JSON__` with stringified `trip.json`.
+- Copy `index-skeleton.md` verbatim → `index.html`. **Leave `__TRIP_JSON__` as the literal placeholder.** Do NOT inline the trip.json contents in this Write — that bloats the call by thousands of lines.
+- Substitute the JSON via shell after the Write (Python over sed for binary-safety with multibyte JSON):
+  ```bash
+  cd "<folder>" && python3 -c "
+  import json, pathlib
+  d = pathlib.Path('data/trip.json').read_text()
+  h = pathlib.Path('index.html').read_text()
+  pathlib.Path('index.html').write_text(h.replace('__TRIP_JSON__', d))
+  "
+  ```
 - Generate minimal `style.css` (50–200 lines). Custom CSS only for the exceptions in `cdn-and-styling.md`.
 - Update `_progress.phase5_step = "D"`.
+- Output progress: `✅ D done — index.html ({n} lines) + style.css ({m} lines) + trip.json injected. → Running final validator...`
 
 **Step 5 — Final validator.** Full check, no `--schema-only`:
 ```bash
@@ -86,13 +114,15 @@ node skills/trip-html-generator/scripts/validate-trip.mjs <folder>
 ```
 Must exit 0. Fix any failures.
 
-### Self-check before each Write/Edit
+### Self-check before each Write/Edit/Bash
 
-Before calling `Write` or `Edit`, ask yourself:
-- Is this Write/Edit > 800 lines of new content? → STOP. Split it.
-- Am I about to re-`Write` `app.js` after C1? → STOP. Use `Edit` to append.
+Before calling any file-writing tool, ask yourself:
+- Is this Write/Edit/append > **500 lines** of new content? → STOP. Split it.
+- Am I about to re-`Write` `app.js` after C1? → STOP. Use `cat >> ... << 'EOF'` to append.
+- Am I about to inline the trip.json into the index.html Write call? → STOP. Use `__TRIP_JSON__` placeholder + Python substitution after.
 - Did I update `_progress.phase5_step` after the last step? → If not, do it before this one.
 - Has the schema-only validator run since the last B-step? → If not, run it now.
+- Have I told the user what just finished and what's starting next? → If not, output the one-line progress ping first.
 
 ### When to consult the longer doc
 

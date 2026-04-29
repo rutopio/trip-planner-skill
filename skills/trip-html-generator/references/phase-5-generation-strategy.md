@@ -66,11 +66,32 @@ node skills/trip-html-generator/scripts/validate-trip.mjs <trip-folder> --schema
 - B2 before any rendering content: every visible POI/schedule/budget label has to map through `t(key)` in `app.js`; if `i18n` is incomplete the renderer will crash silently.
 - B3 before B4: `schedule[].events[]` references POI ids; building POIs first means schedule writes don't introduce orphan ids.
 
+### Sub-batching for big trips
+
+If any single B-section would exceed **500 lines** of new content, split it:
+
+- **B3 with > 10 POIs** → B3a, B3b, B3c, … each adds 5 POIs. Use `Edit` with `old_string` = `"pois": [` (or the closing `]`) for surgical insertion.
+- **B4 with > 7 days** → B4a, B4b, … each adds 3 days of schedule.
+- **B5** → can stay as one section if `weather[] + budget + booking + entryForms + retro` fits under 500 lines combined; otherwise split per-field.
+
+Update `_progress.phase5_step` to the sub-letter (`"B3a"`, `"B3b"`, …) and run schema-only validator after each sub-batch.
+
 ---
 
-## C. Build `app.js` in Function Groups (Edit-append, not Write-once)
+## C. Build `app.js` in Function Groups (shell-append, not Write-once)
 
-`app.js` is the second-largest file. Write the skeleton once, then **append render functions in groups** using the Edit tool. Do NOT re-Write the whole file each time — Edit only sends the diff.
+`app.js` is the second-largest file. Write the skeleton once (C1), then **append render functions in groups** using `Bash` with heredoc:
+
+```bash
+cat >> "<folder>/app.js" << 'EOF'
+function renderCalendar() { /* ... */ }
+function renderCalendarMobile() { /* ... */ }
+EOF
+```
+
+Shell append is O(1) — file size doesn't slow it down. Do NOT use `Edit` to grow `app.js` (Edit recomputes string positions on a growing file and gets slow). Do NOT re-`Write` the whole file (defeats the entire incremental flow).
+
+**Hard ceiling: 500 lines per single append call.** If a render group is bigger, split it (C5a/C5b/etc.).
 
 ### Group order
 
@@ -91,13 +112,22 @@ After each group: do NOT run validator (it requires `index.html` to exist). Just
 
 ## D. Build `index.html` and `style.css` Last
 
-1. **`index.html`** — copy from `index-skeleton.md` verbatim. The skeleton already includes the three CDN tags (Tailwind + Leaflet + Google Fonts) and Tailwind theme config. Replace `__TRIP_JSON__` with the JSON-stringified `trip.json`.
-2. **`style.css`** — minimal. Tailwind handles 90% of styling via CDN. Custom CSS only for the exceptions documented in [cdn-and-styling.md](cdn-and-styling.md) (CSS variables, Leaflet overrides, animations, calendar grid math, UI-style pack specifics). **Target: 50–200 lines.** If you exceed 400, audit and convert to Tailwind classes.
-3. **Run full validator** (no `--schema-only`):
+1. **`index.html`** — copy from `index-skeleton.md` verbatim. The skeleton already includes the three CDN tags (Tailwind + Leaflet + Google Fonts) and Tailwind theme config. **Leave `__TRIP_JSON__` as the literal placeholder during the Write call** — do NOT inline the JSON into the Write payload (that bloats it by thousands of lines and slows the call to a crawl).
+2. **Substitute the JSON afterwards** via Python (binary-safe with multibyte CJK):
+   ```bash
+   cd "<folder>" && python3 -c "
+   import pathlib
+   d = pathlib.Path('data/trip.json').read_text()
+   h = pathlib.Path('index.html').read_text()
+   pathlib.Path('index.html').write_text(h.replace('__TRIP_JSON__', d))
+   "
+   ```
+3. **`style.css`** — minimal. Tailwind handles 90% of styling via CDN. Custom CSS only for the exceptions documented in [cdn-and-styling.md](cdn-and-styling.md) (CSS variables, Leaflet overrides, animations, calendar grid math, UI-style pack specifics). **Target: 50–200 lines.** If you exceed 400, audit and convert to Tailwind classes.
+4. **Run full validator** (no `--schema-only`):
    ```bash
    node skills/trip-html-generator/scripts/validate-trip.mjs <trip-folder>
    ```
-4. Fix any failures. Do not ship a violating trip.
+5. Fix any failures. Do not ship a violating trip.
 
 ---
 
