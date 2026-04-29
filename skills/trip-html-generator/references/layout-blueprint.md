@@ -77,21 +77,21 @@ function showTab(id) {
 **Weather strip city label** — each card must show the city the traveler is in that day as a visible text label (not just a tooltip dot). Use `.wd-city-row` wrapper containing `.wd-city-dot` + `.wd-city-label.wd-city-{city}`:
 
 ```js
-// In renderWeatherStrip(), replace the plain wd-city-dot line with:
-'<div class="wd-city-row">' +
+// In renderWeatherStrip(), build the row with the city color injected as a CSS variable
+// (no per-city CSS classes — driven by trip.cities[] data):
+const c = TRIP.cities.find(x => x.id === w.city) || {};
+'<div class="wd-city-row" style="--city-color:' + (c.color || 'var(--text-3)') + '" data-city="' + w.city + '">' +
   '<div class="wd-city-dot" title="' + getCityName(w.city) + '"></div>' +
-  '<span class="wd-city-label wd-city-' + w.city + '">' + getCityName(w.city) + '</span>' +
+  '<span class="wd-city-label">' + getCityName(w.city) + '</span>' +
 '</div>'
 ```
 
 ```css
-/* City-aware dot + label colors */
-.wd-city-dot{width:6px;height:6px;border-radius:50%;background:var(--text-3);flex-shrink:0}
+/* City colors come from trip.json `cities[].color` and are injected via the
+   --city-color CSS variable on the row element. NEVER add per-city classes here. */
+.wd-city-dot{width:6px;height:6px;border-radius:50%;background:var(--city-color, var(--text-3));flex-shrink:0}
 .wd-city-row{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:6px}
-.wd-city-label{font-size:.58rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:52px}
-.wd-city-label.wd-city-busan{color:#3a7bd5} .wd-city-row:has(.wd-city-busan) .wd-city-dot{background:#3a7bd5}
-.wd-city-label.wd-city-aso{color:#2e7d32}  .wd-city-row:has(.wd-city-aso) .wd-city-dot{background:#2e7d32}
-.wd-city-label.wd-city-fukuoka{color:#c0392b} .wd-city-row:has(.wd-city-fukuoka) .wd-city-dot{background:#c0392b}
+.wd-city-label{font-size:.58rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:52px;color:var(--city-color, var(--text-2))}
 ```
 
 City labels must reflect **the city the traveler is actually in on that date** — read from `WEATHER_DATA[].city` which is populated from the trip schedule in Phase 4. The label is localized via `getCityName(w.city)` → `t('city_' + city)`.
@@ -108,7 +108,7 @@ Sunrise: `wb_twilight`. Sunset: `nightlight`. Golden hour: `photo_camera`.
 ├── .filters (row of .chip buttons, margin-top:0 — flush to top)
 └── .attr-layout (2-col grid: map left, POI list right, height:calc(100vh - 120px))
     ├── #map (Leaflet/OpenStreetMap, flex:1, min-height:0)
-    │   Use: L.map() + L.tileLayer('https://{s}.tile.openstreetmap.org/...')
+    │   Use: L.map() + L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png')
     │   Colored L.circleMarker per category, L.layerGroup for easy filter clearing
     │   "Export to Google Maps" button overlay
     └── .poi-list (scrollable, max-height:100%, min-height:0)
@@ -139,7 +139,7 @@ Mobile fallback (.calendar-mobile, shown <768px):
 
 **Weather Strip — City-Labeled Cards (mandatory)**
 
-Each day in `WEATHER_DATA[]` has a `city` field (e.g. `"busan"`, `"aso"`, `"fukuoka"`).
+Each day in `trip.weather[]` has a `city` field that references a city `id` in `trip.cities[]`. The matching city entry carries its display name and color.
 This city determines **both** the dot color **and** a visible city label below each weather card.
 The label must be **always visible** (not just a tooltip), using this exact markup:
 
@@ -150,20 +150,14 @@ The label must be **always visible** (not just a tooltip), using this exact mark
 '</div>'
 ```
 
-CSS for the city strip:
+CSS for the city strip — generic, no per-city rules:
 ```css
-.wd-city-dot { width:6px; height:6px; border-radius:50%; background:var(--text-3); flex-shrink:0 }
-.wd-city-row { display:flex; align-items:center; justify-content:center; gap:4px; margin-top:6px }
-.wd-city-label { font-size:.58rem; font-weight:600; letter-spacing:.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:52px }
-
-/* Per-city colors — add one rule per city in the trip */
-.wd-city-label.wd-city-busan  { color:#3a7bd5 }
-.wd-city-row:has(.wd-city-busan)  .wd-city-dot { background:#3a7bd5 }
-.wd-city-label.wd-city-aso    { color:#2e7d32 }
-.wd-city-row:has(.wd-city-aso)    .wd-city-dot { background:#2e7d32 }
-.wd-city-label.wd-city-fukuoka{ color:#c0392b }
-.wd-city-row:has(.wd-city-fukuoka) .wd-city-dot { background:#c0392b }
+.wd-city-dot   { width:6px; height:6px; border-radius:50%; background:var(--city-color, var(--text-3)); flex-shrink:0 }
+.wd-city-row   { display:flex; align-items:center; justify-content:center; gap:4px; margin-top:6px }
+.wd-city-label { font-size:.58rem; font-weight:600; letter-spacing:.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:52px; color:var(--city-color, var(--text-2)) }
 ```
+
+The city color is injected at runtime by setting `--city-color` on the row element from `trip.cities[].color`. **Do not add per-city CSS rules** — that would violate the [template contract](template-contract.md).
 
 **Rule:** City labels must reflect the city the traveler is **actually in** on that date — read from `WEATHER_DATA[].city`, not assumed from the itinerary header.
 
@@ -226,8 +220,8 @@ Called at init: `safe('renderBooking', renderBooking);`
           "label_i18n": "booking_outbound | booking_return",
           "flight": "IT606",
           "date": "YYYY-MM-DD",
-          "departure": {"airport": "TPE", "terminal": "T1", "city_zh": "桃園", "time": "16:40"},
-          "arrival":   {"airport": "PUS", "terminal": "T1", "city_zh": "金海", "time": "19:55"},
+          "departure": {"airport": "TPE", "terminal": "T1", "city": {"zh": "桃園"}, "time": "16:40"},
+          "arrival":   {"airport": "PUS", "terminal": "T1", "city": {"zh": "金海"}, "time": "19:55"},
           "duration": "2h15m",
           "maps_dep": "https://www.google.com/maps/...",
           "maps_arr": "https://www.google.com/maps/..."
@@ -655,71 +649,42 @@ These are the **exact CSS patterns** to use. Copy them into the generated `<styl
 
 ##### i18n Completeness (MANDATORY)
 
-**Every single piece of text visible to the user MUST be translatable.** This includes:
+**Single-language is the default.** A trip emits one language — the user's conversation language. Multi-lang is opt-in only. The rules below describe **shape requirements** that apply in both modes; the only difference is how many keys live inside each i18n object.
 
-1. **Static HTML text**: Use `data-i18n="key"` attribute
-2. **JS-rendered text**: Use `t('key')` function — NEVER hardcode `isZh ? '中文' : 'English'`
-   inline in JS. All strings must go through the I18N dictionary.
-3. **Data-driven text** (from trip.json): Add `name_en`, `name_ko`, `name_ja` fields alongside `name` (Chinese)
-4. **Budget items**: Each item needs `name_en`, `name_ko`, `name_ja`
-5. **Schedule events**: Each event needs `name_en/ko/ja` and `note_en/ko/ja`
-6. **Checklist items**: Each item is an object with `{zh, en, ko, ja}` translations
-7. **Chart labels**: Category names via `getCatName()`, city names via `getCityName()`
-8. **Entry form field labels**: Each label is `{zh, en, ko, ja}`
-9. **POI fields — ALL of these must have `_en`, `_ko`, `_ja` variants in trip.json:**
-   - `desc` → `desc_en`, `desc_ko`, `desc_ja` (POI description/status text)
-   - `addr` → `addr_en`, `addr_ko`, `addr_ja` (neighborhood/address)
-   - `hours` → keep as-is (numbers are universal), but translate labels like "All day"
-   - `dining.party_label` → `dining.party_label_en`, `_ko`, `_ja`
-   - `dining.tips_solo` → `dining.tips_solo_en`, `_ko`, `_ja` (arrays)
-   - `dining.seating` → `dining.seating_en`, `_ko`, `_ja`
-   The renderer (`renderPOIs`) must use a helper like `getField(poi, 'desc')` that returns the
-   correct language version based on `currentLang`.
-10. **Retro tab data — ALL retro text must be multilingual:**
-    - `retro.changelog[].description` / `description_en` / `description_ko` / `description_ja`
-    - `retro.changelog[].reason` / `reason_en` / `reason_ko` / `reason_ja`
-    - `retro.changelog[].lesson` / `lesson_en` / `lesson_ko` / `lesson_ja`
-    - `retro.missed_pois[].reason` / `reason_en` / `reason_ko` / `reason_ja`
-    - `retro.missed_pois[].suggestion` / `suggestion_en` / `suggestion_ko` / `suggestion_ja`
-    - `retro.planning_lessons[]` → each is `{zh, en, ko, ja}`
-    - `retro.budget_review` notes → `note_zh`, `note_en`, `note_ko`, `note_ja`
-    - All JS-rendered labels in `renderRetro()` must use `t('key')`, NOT inline ternaries
+**One format only — nested i18n objects. Bare strings and flat-sibling keys (`name_en`, `desc_ko`) are FORBIDDEN.** The validator (`scripts/validate-trip.mjs`) blocks both.
 
-11. **Booking tab data — ALL booking fields must be multilingual:**
-    - `booking.confirmed[].title` → `title_en`, `title_ko`, `title_ja`
-    - `booking.confirmed[].carrier` → keep as-is (airline names are universal)
-    - Flight segment labels: use i18n keys `booking_outbound`/`booking_return`
-    - Terminal/airport names: `city_zh` → add `city_en`, `city_ko`, `city_ja`
-    - Status badges: use i18n keys `booking_purchased`/`booking_pending`
-    - Flight verdict: use i18n keys
-    - Check-in note: must be translated
-    - Hotel/ferry/tour titles and descriptions: all need `_en`, `_ko`, `_ja` variants
-    - Comparison table verdict text: use i18n keys, NOT hardcoded Chinese
-    - Recommended purchases: `name_i18n` and `note_i18n` keys must exist in I18N dictionary
-12. **POI names — primary/secondary display logic:**
-    - `zh` mode: show `name` (Chinese) as primary, `nameLocal` as secondary
-    - `en` mode: show `nameLocal` as primary (it's the romanized/local name), `name` as secondary
-    - `ko` mode: show `nameLocal` as primary, `name` as secondary
-    - `ja` mode: show `nameLocal` as primary, `name` as secondary
-    - The renderer must swap primary/secondary based on `currentLang`
-    - For the "next trip" and retro sections: POI names follow the same swap logic
+**Every user-visible text field is a nested i18n object:**
 
-**Zero tolerance for untranslated text.** If switching to any language shows Chinese/mixed text
-or untranslated text from another language, it's a bug. Test by switching to EVERY supported
-language and scrolling through EVERY tab — no Chinese should appear in English mode, no English
-should appear in Korean mode, etc.
+```json
+// Single-lang (default):
+{ "name": { "zh": "釜山" }, "desc": { "zh": "海濱城市" } }
 
-**i18n verification checklist (run before declaring generation complete):**
-1. Switch to each language (zh, en, ko, ja)
-2. Visit EVERY tab: Overview, Calendar, Booking, Budget, Spots, Checklist, Retro
-3. Check: no text from other languages visible
-4. Check: POI names show correct primary/secondary
-5. Check: booking cards, flight labels, status badges all translated
-6. Check: retro changelog, lessons, missed POIs all translated
-7. Check: dining badges, party-size labels all translated
+// Multi-lang (opt-in only):
+{ "name": { "zh": "釜山", "en": "Busan" }, "desc": { "zh": "海濱城市", "en": "Coastal city" } }
+```
 
-**applyLang() must re-render ALL dynamic content:**
-- `renderPOIs()`, `renderCalendar()`, `renderBudget()`, `renderChecklist()`, `renderEntryForms()`, `renderNomadSpots()`, `renderToday()`, `updateClocks()`, `renderOverviewExtras()`, `renderRetro()`
+**What must be a nested i18n object** (this list is non-exhaustive — any visible string field follows the same shape):
+
+- **Static HTML chrome** — use `data-i18n="key"` and read from `trip.i18n.{lang}.{key}`.
+- **JS-rendered chrome** — use `t('key')`. **NEVER** hardcode `isZh ? '中文' : 'English'` ladders.
+- **POI fields**: `name`, `nameLocal`, `desc`, `addr`. Plus optional `dining.party_label`, `dining.seating`, `dining.tips_solo[]`, `dining.tips_group[]` (each tip is itself an i18n object).
+- **Schedule**: `events[].name`, `events[].note`, `events[].restaurant`.
+- **Budget**: `items[].name`, `actual_expenses[].name`.
+- **Checklist**: `groups[].title`, `groups[].items[].label`.
+- **Entry forms**: `entryForms[].title`, `fields[].label`. Plus `entryRequirements[].name`, `entryRequirements[].items[].task`.
+- **Booking**: `purchased[].name`, `compare[].name`, `recommended[].name`, `passes[].name`, flight `depart.place` / `arrive.place`.
+- **Retro** (post-trip): `changelog[].description`, `changelog[].reason`, `changelog[].lesson`, `missed_pois[].reason`, `missed_pois[].suggestion`, `planning_lessons[]`, `budget_review[].note`.
+- **Holidays**: `holidays.items[].name`.
+
+**POI primary/secondary name logic:** `name` (translated to current lang) shows as primary, `nameLocal` (the on-the-ground local-script name, also an i18n object) shows as secondary. Same rule in both single-lang and multi-lang. The renderer never needs per-language conditionals — it just calls `L(poi.name)` and `L(poi.nameLocal)`.
+
+**`applyLang()` must re-render ALL dynamic content** (only meaningful in multi-lang mode, but harmless in single-lang):
+`renderPOIs()`, `renderCalendar()`, `renderBudget()`, `renderChecklist()`, `renderEntryForms()`, `renderNomadSpots()`, `renderToday()`, `updateClocks()`, `renderOverviewExtras()`, `renderRetro()`.
+
+**Verification before shipping:**
+1. Run `node scripts/validate-trip.mjs <folder>` — must exit 0. It checks every field shape and i18n key coverage automatically.
+2. Single-lang: switch through every tab, confirm no `[object Object]` (means a bare object leaked into the DOM without going through `L()`).
+3. Multi-lang only: switch each lang in `supportedLangs`, confirm no foreign-language text leaks across modes.
 
 ##### Responsive Breakpoints
 
@@ -757,7 +722,7 @@ should appear in Korean mode, etc.
 8. **Budget items are list rows** — never a full HTML `<table>`
 9. **Calendar uses 60px per hour** — consistent visual density
 10. **All monetary values get `data-cost` attribute** — for JS manipulation
-11. **Map uses Leaflet/OpenStreetMap** — `L.map()` + `L.tileLayer('https://{s}.tile.openstreetmap.org/...')` with colored `L.circleMarker` per category. Include an "Export to Google Maps" button overlay that generates a Google Maps directions URL with the currently visible POIs and opens in a new tab. Every POI also has an individual Google Maps link. Include Leaflet CSS/JS from unpkg CDN.
+11. **Map uses Leaflet + CartoDB Voyager basemap** — `L.map()` + `L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {subdomains:'abcd', maxZoom:20, attribution:'© OpenStreetMap contributors © CARTO'})` with colored `L.circleMarker` per category. **Do NOT use `tile.openstreetmap.org` directly** — OSM blocks high-volume browser traffic with 403. CartoDB allows anonymous public use and has stable CORS. Include an "Export to Google Maps" button overlay that generates a Google Maps directions URL with the currently visible POIs and opens in a new tab. Every POI also has an individual Google Maps link. Include Leaflet CSS/JS from unpkg CDN.
 12. **No floating elements** — no FAB, no floating chat, no sticky banners
 13. **Chart bars must have visible color** — `--chart-bar` should be `#888` or darker, NOT light gray like `#D4D4D8`. Time allocation bars should use category colors (attraction=coral, work=indigo, food=green, etc.)
 14. **Mobile padding is mandatory** — all content sections (charts, h-bars, cat-grid, items-table, section-labels) must have `padding: 0 16px` on mobile. Header and calendar also need top padding.
@@ -767,7 +732,7 @@ should appear in Korean mode, etc.
 18. **Live clocks on Calendar tab** — show real-time clocks in the calendar header: destination local time (primary, inverted black) + passport country time (secondary). Update every 30 seconds. Use `toLocaleTimeString` with `timeZone` option.
 19. **Now line on Calendar** — a red horizontal line (`#e8664a`) with a dot and time label showing the current **destination timezone** (e.g., "02:43 GMT+9" or "02:43 KST"). Use `toLocaleString('en-US', {timeZone: DEST_TZ, timeZoneName:'short'})` to get the timezone abbreviation. Updates every 30 seconds.
 20. **Time allocation is computed from schedule** — do NOT hardcode time data. Calculate total hours per category and city days from the actual `schedule` array in trip.json. Render dynamically via JS.
-21. **Language switcher in sidebar** — add a language toggle button at the bottom of the sidebar (above print). It cycles between: the user's passport language (e.g., Traditional Chinese for Taiwan passport) and the destination's local language(s) (e.g., Korean for Korea, Japanese for Japan). All text content that has a translation should have `data-lang-zh`, `data-lang-ko`, `data-lang-ja` attributes. The switcher changes which `data-lang-*` attribute is displayed. POI names already have `nameLocal` — use that. UI labels, section titles, and tab names should also have translations stored in a `translations` object in trip.json.
+21. **Language switcher in sidebar** — add a language toggle button at the bottom of the sidebar (above print). **Hide the entire button (`hidden` attribute or `display:none`) when `TRIP.supportedLangs.length <= 1`** — there is nothing to switch to in single-lang mode (the default). When multi-lang is enabled, it cycles between: the user's passport language (e.g., Traditional Chinese for Taiwan passport) and the destination's local language(s) (e.g., Korean for Korea, Japanese for Japan). The switcher updates which i18n key is displayed via `t()`/`L()`. POI names already have `nameLocal` — use that. UI labels, section titles, and tab names live in `trip.i18n`.
 22. **Booked flight cards** — outbound and return flights are shown in ONE card with a vertical divider. Each flight shows: flight number, date+time, airline, departure→arrival terminal numbers, Google Maps links for each terminal, AND a **Web Check-in link** with the airline's online check-in URL + when it opens (e.g., "Opens 48hr - 1hr before departure"). Research the specific airline's check-in window.
 
     **CRITICAL: Timezone-aware flight duration calculation.** Flight duration MUST account for timezone differences between departure and arrival airports. Do NOT simply subtract local arrival time from local departure time — this produces wrong results for international flights.

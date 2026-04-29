@@ -1,0 +1,142 @@
+---
+name: phase-5-generation-strategy
+description: How to actually generate the trip files without timing out, truncating, or producing broken paths
+---
+
+# Phase 5 Generation Strategy
+
+The Phase 5 deliverables (`trip.json` + `index.html` + `app.js` + `style.css`) total several thousand lines. Writing them in one shot causes timeouts, truncation, and unrecoverable mid-write failures. This document defines the **incremental, validated, resumable** generation flow that the generator MUST follow.
+
+---
+
+## A. Output Path Rule (MANDATORY — NO improvisation)
+
+The output folder is determined by a single deterministic rule:
+
+```
+{cwd}/{destination-slug}-{year}/
+```
+
+- `{cwd}` = the current working directory at the time the skill is invoked. Use the absolute path of `pwd` — do NOT use `~`, do NOT use `$HOME`, do NOT invent parent directories like `trip-plan/`.
+- `{destination-slug}` = lowercase ASCII destination, hyphenated. E.g. `kyoto`, `busan-fukuoka`, `tokyo`.
+- `{year}` = 4-digit start year of the trip from `trip.json.startDate`.
+
+**Examples (correct):**
+- cwd `/Users/alex/projects/` + Kyoto 2026 → `/Users/alex/projects/kyoto-2026/`
+- cwd `/Users/alex/Documents/GitHub/trip-planner-skill/` + Busan+Fukuoka 2026 → `/Users/alex/Documents/GitHub/trip-planner-skill/busan-fukuoka-2026/`
+
+**Forbidden patterns:**
+- `[anything]GitHub` — paste/glob corruption, abort and re-derive `pwd`
+- Nested `trip-plan/`, `trips/`, `output/` parents that aren't in cwd
+- Spaces, brackets, or non-ASCII in the folder name
+- Absolute paths to other users' homes
+
+**Before any `mkdir`:**
+1. Run `pwd` once and capture the literal string.
+2. Concatenate `{pwd}/{slug}-{year}` with no `cd`, no shell variables, no globs.
+3. Confirm the path with the user once before creating files: "I'll generate the trip into `/abs/path/{slug}-{year}/`. OK?"
+
+---
+
+## B. Build `trip.json` in 5 Sections (write → validate → continue)
+
+`trip.json` is the largest single artifact and the source of truth. Build it section-by-section, writing the file after each section and re-running schema validation. This catches missing i18n keys early instead of after the whole pipeline.
+
+### Section order
+
+| # | Section | Fields added | Validate after |
+|---|---------|--------------|----------------|
+| B1 | **Skeleton** | `lang`, `supportedLangs`, `destination`, `startDate`, `endDate`, `currency`, `cities[]`, empty `i18n{}`, `pois:[]`, `schedule:[]` | schema-only |
+| B2 | **i18n chrome** | `i18n.{lang}.{key}` for every required key — in **single-lang mode (default), only one lang block** | schema-only |
+| B3 | **POIs** | `pois[]` with full nested-i18n `name`/`desc`, `lat`, `lng`, `cat`, `city`, `addr` | schema-only |
+| B4 | **Schedule** | `schedule[]` with day-by-day events, restaurants, booking_urls | schema-only |
+| B5 | **Auxiliary** | `weather[]`, `budget`, `booking`, `entryForms`, `flightIntel`, `retro` | schema-only |
+
+After each section: run
+
+```bash
+node skills/trip-html-generator/scripts/validate-trip.mjs <trip-folder> --schema-only
+```
+
+`--schema-only` skips all HTML/CSS/JS checks (those files don't exist yet). Fix any errors before moving to the next section. **Never proceed past a failing section** — partial trip.json + downstream HTML compounds the cost of recovery.
+
+### Why this order
+
+- B1 first: gives validator the `cities[]` list so B3/B4 can reference cities by id without dangling references.
+- B2 before any rendering content: every visible POI/schedule/budget label has to map through `t(key)` in `app.js`; if `i18n` is incomplete the renderer will crash silently.
+- B3 before B4: `schedule[].events[]` references POI ids; building POIs first means schedule writes don't introduce orphan ids.
+
+---
+
+## C. Build `app.js` in Function Groups (Edit-append, not Write-once)
+
+`app.js` is the second-largest file. Write the skeleton once, then **append render functions in groups** using the Edit tool. Do NOT re-Write the whole file each time — Edit only sends the diff.
+
+### Group order
+
+| # | Group | Functions |
+|---|-------|-----------|
+| C1 | **Bootstrap** (from app-skeleton.md verbatim) | `bootstrap()`, `t()`, `L()`, `cityById()`, `bindLanguageSwitcher()`, `bindTabs()`, `showTab()`, `applyLang()`, `fmtMoney()`, `injectCityVars()` |
+| C2 | **Today + Overview** | `renderToday()`, `renderTodayCard()`, `renderWeatherStrip()`, `renderOverviewExtras()`, `getEvIcon()` |
+| C3 | **Calendar** | `renderCalendarDesktop()`, `renderCalendarMobile()`, `initClocks()`, `renderNowLine()`, drag-drop handlers |
+| C4 | **Spots/Map** | `renderPOIList()`, `initMap()`, `focusPOI()`, `openPOIModal()`, filter chips |
+| C5 | **Booking** | `renderFlightCard()`, `renderBookingCompare()`, `renderBookingPurchased()`, `renderHolidayCalendar()` |
+| C6 | **Budget** | `renderBudgetEstimated()`, `renderBudgetActual()`, mode toggle, currency switcher |
+| C7 | **Checklist + Retro** | `renderEntryForms()`, `renderChecklist()`, `renderNomadSpots()`, `renderRetro()` |
+| C8 | **Export + misc** | `initExport()` (GeoJSON), Google Maps export, print mode |
+
+After each group: do NOT run validator (it requires `index.html` to exist). Just visually scan the appended block for syntax errors before continuing.
+
+---
+
+## D. Build `index.html` and `style.css` Last
+
+Both can be written in one shot — neither typically exceeds ~600 lines.
+
+1. `index.html` — copy from `index-skeleton.md` verbatim, fill `__TRIP_JSON__` with the JSON-stringified `trip.json`.
+2. `style.css` — generate from chosen UI style (Phase 4.5) + design tokens.
+3. Run **full validator** (no `--schema-only`):
+   ```bash
+   node skills/trip-html-generator/scripts/validate-trip.mjs <trip-folder>
+   ```
+4. Fix any failures. Do not ship a violating trip.
+
+---
+
+## E. Checkpoint & Resume (mid-Phase-5)
+
+Phase 5 is long enough to time out mid-section. Track progress in `data/trip.json._progress`:
+
+```json
+{
+  "_progress": {
+    "completed_phase": 4,
+    "phase5_step": "B3",
+    "updated_at": "2026-04-29T15:42:00+08:00"
+  },
+  "lang": "zh",
+  "...": "..."
+}
+```
+
+After each section/group completes, update `_progress.phase5_step` to the **just-finished** step (`B1`/`B2`/`B3`/`B4`/`B5`/`C1`...`C8`/`D`). On resume:
+
+1. Read `_progress.phase5_step`.
+2. Resume at the next step (e.g., `B3` finished → continue at `B4`).
+3. Do NOT re-write earlier sections — they're already in the file.
+
+When the full validator passes in step D, **delete `_progress`** (or leave it — the template ignores unknown fields, but a clean ship is preferred).
+
+---
+
+## Summary Checklist (run through this every Phase 5)
+
+- [ ] `pwd` captured, `{slug}-{year}` folder name confirmed with user
+- [ ] `mkdir -p {abs-path}/data {abs-path}/.claude` succeeds with no bracket-corruption in path
+- [ ] B1–B5 written incrementally, `--schema-only` validator green after each
+- [ ] `_progress.phase5_step` updated after each section/group
+- [ ] C1–C8 appended via Edit, not full Write rewrites
+- [ ] `index.html` + `style.css` generated last
+- [ ] Full validator exits 0
+- [ ] `_progress` removed (or accepted as harmless residue)
+- [ ] Tell user the absolute folder path + `python3 serve.py` command

@@ -13,158 +13,107 @@ description: >
 # Trip HTML Generator
 
 Generate a complete trip planner app as a **multi-file folder structure** (`index.html` + `style.css` + `app.js` + `data/trip.json`).
-Do NOT use any template file -- build all files from scratch using the layout blueprint and populate with the researched data.
 
-> **Reference documents** (read these for full specifications):
-> - See `references/layout-blueprint.md` for the complete layout structure, visual design system, CSS reference, and responsive breakpoints
-> - See `references/trip-json-schema.md` for the data schema (trip.json structure)
-> - See `references/html-content-sections.md` for tab-specific markup and content requirements
+**`data/trip.json` is the single source of truth.** `index.html`, `style.css`, and `app.js` are a generic shell — the same shell across every trip — and contain ZERO trip-specific strings, prices, city names, or hardcoded data. Updating a trip = editing `trip.json` only.
+
+> **Reference documents — read all of these before generating:**
+> - **[references/phase-5-generation-strategy.md](references/phase-5-generation-strategy.md)** — MANDATORY: output path rule, incremental section-by-section build, checkpoint/resume. Read this FIRST.
+> - **[references/template-contract.md](references/template-contract.md)** — MANDATORY rules: what may and may not appear in HTML/CSS/JS, plus the validation checklist
+> - **[references/index-skeleton.md](references/index-skeleton.md)** — the canonical `index.html` shell (copy verbatim, fill `__TRIP_JSON__`)
+> - **[references/app-skeleton.md](references/app-skeleton.md)** — the canonical `app.js` shape (bootstrap, `t(key)`, `L(obj)`, `cityById`, render dispatch)
+> - [references/trip-json-schema.md](references/trip-json-schema.md) — full `trip.json` schema (`lang`, `supportedLangs`, `cities`, `i18n`, `weather`, `booking`, `entryForms`, `retro`, …)
+> - [references/layout-blueprint.md](references/layout-blueprint.md) — layout structure, visual design system, CSS reference, responsive breakpoints
+> - [references/html-content-sections.md](references/html-content-sections.md) — tab-specific markup and content requirements
+
+## Generation Order (strict — see [phase-5-generation-strategy.md](references/phase-5-generation-strategy.md) for the full incremental flow)
+
+**DO NOT write all four files in one shot.** That causes timeouts and truncation. Instead:
+
+0. **Determine output path:** `{cwd}/{destination-slug}-{year}/`. Run `pwd` once, confirm with user. NO bracket-corrupted paths, NO invented parent folders. See strategy doc §A.
+1. **Build `data/trip.json` in 5 sections (B1–B5)** — skeleton → i18n → POIs → schedule → auxiliary. Run `validate-trip.mjs --schema-only` after each section. See strategy doc §B.
+2. **Generate `app.js` from `app-skeleton.md` in 8 function groups (C1–C8)** — bootstrap first as a full Write, then **append** each render group via Edit (do NOT rewrite the whole file each time). Bootstrap functions (`t()`, `L()`, `cityById()`, etc.) must match the skeleton verbatim. Every visible string goes through `t(key)` or `L(obj)`. See strategy doc §C.
+3. **Copy `index-skeleton.md` verbatim** to `index.html`. Replace `__TRIP_JSON__` with the JSON-stringified trip payload (same bytes as `data/trip.json`).
+4. **Generate `style.css`** from the chosen UI style (Phase 4.5 selection) + the layout-blueprint design tokens. Use generic class names; city colors come from `--city-color` CSS variables, never per-city selectors.
+5. **Run the full validator** against the output folder. **MUST exit 0 before you report the trip as generated.**
+
+```bash
+node skills/trip-html-generator/scripts/validate-trip.mjs <trip-folder>                  # full check (final)
+node skills/trip-html-generator/scripts/validate-trip.mjs <trip-folder> --schema-only    # mid-build check (after each B-section)
+```
+
+**Track progress in `data/trip.json._progress.phase5_step`** so an interrupted run can resume without re-doing earlier sections. See strategy doc §E.
+
+The validator enforces: required files present, schema shape, `i18n` covers all `supportedLangs` × required keys, every `pois[]/schedule[]/weather[]` `city` references `cities[].id`, `index.html`/`app.js`/`style.css` contain ZERO trip-specific tokens (city display names, destination, tagline, POI names, currency codes), no per-city CSS selectors, no module-scope literal arrays (`WEATHER_DATA`, `POIS`, `SCHEDULE`), no language ladders (`lang === 'zh' ? ... : ...`).
+
+If the validator reports failures: regenerate the offending file. Do not ship a violating trip.
 
 ---
 
-### Data Language Rule
+## Tab Anatomy (MANDATORY — do not invent your own layout)
 
-**All text fields in `trip.json` must include: the user's conversation language + the destination country language + English.**
+The 7 tabs each have a fixed responsibility. Do **not** merge them, do **not** put map/POI list on the Overview tab, do **not** create new tabs. The full mount-point list is in [index-skeleton.md](references/index-skeleton.md); summary:
 
-- Use the user's conversation language in the base field (e.g., for `name`, store the user's language in `name`)
-- Also provide destination-language fields (e.g., Korea -> `name_ko`, Japan -> `name_ja`)
-- Always include English fields (e.g., `name_en`)
-- Apply the same rule to all user-visible text fields: `desc`, `note`, `tip`, `title`, etc.
+| Tab id              | Sidebar icon         | Purpose                                              | Required mount points                                                                                       |
+|---------------------|----------------------|------------------------------------------------------|-------------------------------------------------------------------------------------------------------------|
+| `tab-attractions`   | `travel_explore`     | Trip summary: header, stats, countdown, today card, weather strip | `#trip-destination` `#trip-meta` `#trip-tagline` `#stats-bar` `#info-box` `#time-countdown` `#today-card` `#weather-strip` |
+| `tab-calendar`      | `calendar_month`     | Day-by-day grid + mobile fallback                    | `#calendar-desktop` `#calendar-mobile`                                                                      |
+| `tab-booking`       | `sell`               | Flights, hotels, tickets, passes, recommended buys   | `#flight-intel` `#booking-purchased` `#booking-compare` `#booking-recommended` `#holiday-calendar`          |
+| `tab-budget`        | `wallet`             | Estimated/actual toggle, charts, line items          | `#budget-mode-toggle` `#budget-total` `#budget-by-city` `#budget-by-cat` `#budget-detail`                   |
+| `tab-time`          | `map`                | **Spots / Map** — filters + Leaflet map + POI list   | `#poi-filters` `#map` `#poi-list`                                                                           |
+| `tab-checklist`     | `checklist`          | Entry forms + pre-trip checklist + nomad spots       | `#entry-forms` `#checklist-groups` `#nomad-workspaces`                                                      |
+| `tab-retro`         | `auto_stories`       | Post-trip retrospective (hidden until `endDate` passes) | `#retro-map` `#retro-budget-review` `#retro-missed` `#retro-changelog` `#retro-lessons`                  |
 
-**Example: Taiwanese user visiting Korea + Japan**
+### Hard rules
+
+1. **`#map` exists in exactly ONE place: inside `#tab-time` (Spots/Map tab).** Never inside Overview, never duplicated. Leaflet's `L.map('map')` will silently bind to the first occurrence — putting one in Overview AND Spots breaks both tabs.
+2. **POI list lives in `#tab-time`.** Overview shows a stat count (`#stats-bar`), not the full list.
+3. **Calendar grid lives in `#tab-calendar`.** Overview shows the **today card** (today's events only) at `#today-card`, not the full calendar.
+4. **Each tab section is `<section class="tab-panel" id="tab-{id}">`.** Use `class="active"` for the initially-visible tab. Switching is `app.js → showTab(id)` — generic, no per-tab logic.
+5. **The retro tab is hidden until `new Date() >= new Date(TRIP.endDate)`.** Do not show it before the trip ends.
+6. **Cover overlay and Today overlay** (if you choose to include them) are top-level `<div>` siblings of `<main>`, not inside any tab. They overlay the entire app on initial load and are dismissed via buttons.
+
+If the generated HTML places `#map` outside `tab-time`, or skips any required mount point, the validator fails the build.
+
+---
+
+### Data Language Rule (MANDATORY — single format)
+
+**Every user-visible text field is a nested i18n object. NEVER a bare string. NEVER `field` + `field_en` siblings.**
+
 ```json
-{
-  "name": "龍頭山公園+釜山塔",
-  "name_en": "Yongdusan Park + Busan Tower",
-  "name_ko": "용두산공원/부산타워",
-  "name_ja": "龍頭山公園+釜山タワー",
-  "nameLocal": "용두산공원/부산타워"
-}
+✅ GOOD (single-lang, default):  { "name": { "zh": "淺草寺" } }
+✅ GOOD (multi-lang, opt-in):    { "name": { "zh": "淺草寺", "en": "Senso-ji" } }
+❌ BAD:  { "name": "淺草寺", "name_en": "Senso-ji", "name_ja": "浅草寺" }   // flat-sibling
+❌ BAD:  { "name": "淺草寺" }                                                // bare string
 ```
 
-**`nameLocal`** should be the attraction's local-language name as used in that country (for map labels, Google Maps search, etc.).
+**Why:** the runtime resolver `L(obj)` (defined in [app-skeleton.md](references/app-skeleton.md)) reads `obj[currentLang]` first, falls back to default lang then English. Passing a flat-sibling shape makes it return the bare object — which renders as `[object Object]` in the UI. Bare strings can't be translated.
 
-**Apply the same rule to schedule events:**
-```json
-{
-  "name": "抵達金海機場",
-  "name_en": "Arrive Gimhae Airport",
-  "name_ko": "김해공항 도착",
-  "name_ja": "金海空港到着",
-  "note": "19:55 降落",
-  "note_en": "19:55 Landing",
-  "note_ko": "19:55 착륙",
-  "note_ja": "19:55 着陸"
-}
-```
+Read [trip-json-schema.md §MANDATORY i18n Format](references/trip-json-schema.md) for the complete list of i18n-required fields and forbidden patterns.
 
-**All other user-visible text (checklist items, budget items, taglines, etc.) must follow this rule.**
+### Required Languages (single-language by default)
 
-### Default Website Language
+**Default: emit ONE language only — the language the user is conversing with you in.**
 
-The default display language of the generated HTML website should be the language used in the conversation between the user and AI. For example, if the user converses in Traditional Chinese, the default language on page load should be `zh`. If in English, default to `en`. If the conversation language cannot be determined, default to `en` (English).
+- `lang` = user's conversation language (e.g., `"zh"` for a Traditional-Chinese-speaking user)
+- `supportedLangs` = `[lang]` (a single-element array)
+- Every i18n object holds exactly one key — that lang. Example: `{ "name": { "zh": "淺草寺" } }`
+- Place names: write the local-language name directly under the user's lang key (e.g., a Taiwanese user visiting Japan gets `{ "zh": "淺草寺" }` not separate `ja` translations).
+- The language switcher UI in `index.html` still renders, but with one pill. That's fine — the validator and renderer work unchanged.
 
-### Content Language & Currency
+**Why single-lang:** translating every POI/event/UI string into 4 languages adds thousands of tokens to `trip.json` for zero user benefit (the user only reads one language). Multi-lang is a feature the user can opt into later by adding more `supportedLangs` entries and translations.
 
-**MANDATORY: Full i18n (internationalization) with runtime language switching.**
+**Multi-lang is opt-in only.** Only emit multiple languages if the user explicitly asks ("我要中英文都有" / "include English"). In that case, follow the original rule: include user's lang + English + destination language(s), e.g. `["zh", "en", "ja"]`.
 
-The generated HTML MUST support **4 languages** with a language switcher that translates the **entire site** in real-time -- not just POI names, but ALL UI text, labels, buttons, stats, calendar events, clock labels, navigation, descriptions, and tips.
+The nested-i18n object structure (`{ "name": { "zh": "..." } }`) is still mandatory — do NOT use bare strings. The validator's flat-sibling check (`name_en`, `name_ja`) still applies. We're keeping the shape, just shrinking the content.
 
-#### Required Languages (always all 4)
+### UI Chrome Translations
 
-1. **User's conversation language** (e.g., Traditional Chinese if the user chats in Chinese) -- the default (see "Default Website Language" above)
-2. **English** -- always included
-3. **Destination country language(s)** -- e.g., Korean for Korea, Japanese for Japan
-4. If the trip covers 2+ countries with different languages (e.g., Korea + Japan), include both
+Every UI string the user reads (tab labels, buttons, headings, empty states, status badges, week labels) lives in `trip.i18n.{lang}.{key}`. The renderer accesses them via `t(key)`.
 
-Example for a Taiwanese user visiting Korea & Japan: `zh`, `en`, `ko`, `ja`
-
-#### i18n Architecture (MANDATORY)
-
-1. **I18N dictionary in app.js** -- a single `const I18N = {}` object containing ALL translatable strings:
-   ```js
-   const I18N = {
-     // Navigation
-     nav_attractions: { zh:'概覽', en:'Overview', ko:'개요', ja:'概要' },
-     nav_time:        { zh:'景點', en:'Spots', ko:'명소', ja:'スポット' },
-     nav_calendar:    { zh:'Itinerary', en:'Itinerary', ko:'Itinerary (ko)', ja:'Itinerary (ja)' },
-     nav_more:        { zh:'More', en:'More', ko:'More (ko)', ja:'More (ja)' },
-     // Stats
-     stat_total:      { zh:'實際花費', en:'Total Spent', ko:'총 지출', ja:'実際の費用' },
-     // Categories
-     cat_food:        { zh:'Food', en:'Food', ko:'Food (ko)', ja:'Food (ja)' },
-     // Clock
-     clock_dest:      { zh:'KR / JP', en:'KR / JP', ko:'KR / JP', ja:'KR / JP' },
-     clock_hour:      { zh:'HOUR', en:'HOUR', ko:'HOUR', ja:'HOUR' },
-     clock_min:       { zh:'MIN', en:'MIN', ko:'MIN', ja:'MIN' },
-     // Info, buttons, week labels, booking labels, etc. -- EVERYTHING
-     ...
-   };
-   ```
-
-2. **`data-i18n` attributes on ALL HTML elements** -- every translatable text in index.html:
-   ```html
-   <span data-i18n="nav_attractions">概覽</span>
-   <div class="st-label" data-i18n="stat_total">實際花費</div>
-   <button class="pill" data-i18n="cal_week1">Week 1（3/30–4/5）</button>
-   ```
-
-3. **`t(key)` helper function** -- returns the translated string for the current language:
-   ```js
-   function t(key) {
-     const entry = I18N[key];
-     if (!entry) return key;
-     return entry[currentLang] || entry[defaultLang] || key;
-   }
-   ```
-
-4. **Multilingual schedule events in trip.json** -- every event has `name_en`, `name_ko`, `name_ja` + `note_en`, `note_ko`, `note_ja`:
-   ```json
-   {"sh":19.5,"eh":20,"name":"Arrive Gimhae Airport",
-    "name_en":"Arrive Gimhae Airport","name_ko":"Arrive Gimhae Airport (ko)","name_ja":"Arrive Gimhae Airport (ja)",
-    "cat":"transport","note":"19:55 landing",
-    "note_en":"19:55 landing","note_ko":"19:55 landing (ko)","note_ja":"19:55 landing (ja)"}
-   ```
-
-5. **`getEventName(ev)` / `getEventNote(ev)` helpers** -- used in renderCalendar:
-   ```js
-   function getEventName(ev) {
-     if (currentLang === 'en' && ev.name_en) return ev.name_en;
-     if (currentLang === 'ko' && ev.name_ko) return ev.name_ko;
-     if (currentLang === 'ja' && ev.name_ja) return ev.name_ja;
-     return ev.name;
-   }
-   ```
-
-6. **`translateCity(cityStr)` helper** -- translates free-form city names in the schedule
-
-6b. **`getField(obj, field)` helper** -- generic multilingual field getter for ANY object:
-   ```js
-   function getField(obj, field) {
-     if (currentLang !== 'zh') {
-       var localized = obj[field + '_' + currentLang];
-       if (localized) return localized;
-     }
-     return obj[field];
-   }
-   ```
-   Use for: `getField(poi, 'desc')`, `getField(poi, 'addr')`, `getField(missed, 'reason')`,
-   `getField(changelog, 'lesson')`, `getField(dining, 'party_label')`, etc.
-   This replaces all `isZh ? x.reason : x.reason_en` patterns.
-
-7. **`applyLang()` function** -- called on language switch AND on init (in `DOMContentLoaded`), MUST:
-   - Auto-switch currency via `LANG_CURR_MAP` (see Currency rule above)
-   - Update all `[data-i18n]` elements
-   - Re-render POI list (`renderPOIs`)
-   - Re-render calendar (`renderCalendar`) -- always, not just when active
-   - Re-render budget (`renderBudget`) -- always
-   - Update clocks (`updateClocks`)
-   - Update any other dynamic content
-
-   **CRITICAL:** `applyLang()` MUST be called during `DOMContentLoaded` init, AFTER all render functions are initialized. Without this, the HTML will show hardcoded Chinese text even when `currentLang` is set to a different language. Add `safe('applyLang', applyLang);` near the end of the init block.
-
-8. **Language switcher UI** -- a menu accessible from both sidebar and bottom bar, showing all 4 languages.
-   The `LANGS` array order determines the menu display order. **The default language (matching `currentLang`) MUST be first** in the array so it appears at the top of the language menu.
+- The **list of required keys** is in [app-skeleton.md §Required `i18n` keys](references/app-skeleton.md). Phase 5 generator MUST emit a value for each key under every `supportedLangs` entry.
+- **NEVER hardcode UI text in `app.js` or `index.html`.** No `currentLang === 'zh' ? '中文' : 'English'`. No `<button>概覽</button>`. Use `t('tab.today')` and `<button data-i18n="tab.today"></button>`.
+- The validator catches both: it warns on language ladders in JS and errors on trip-display tokens in HTML/CSS/JS.
 
 #### Fonts (MANDATORY)
 
@@ -254,8 +203,8 @@ The calendar renderer shows this info:
 - All prices throughout the HTML show **destination currency (home currency equivalent)**
   e.g., "W3,000 (NT$64)" or "Y1,500 (NT$300)"
 
-**Auto-switch currency with language (MANDATORY):**
-When the user switches language, the currency MUST auto-switch to the corresponding currency. Implement via a `LANG_CURR_MAP` and apply it in `applyLang()`:
+**Auto-switch currency with language (only relevant in multi-lang mode):**
+In single-language mode (default), there's nothing to switch — just set `currentCurr` to the home currency on init and skip the auto-switch logic. In multi-lang mode, when the user switches language, the currency MUST auto-switch to the corresponding currency. Implement via a `LANG_CURR_MAP` and apply it in `applyLang()`:
 ```js
 const LANG_CURR_MAP = { zh:'TWD', en:'USD', ko:'KRW', ja:'JPY' };
 // In applyLang():
@@ -386,8 +335,10 @@ Layout:
 // Check event name for flight/airport keywords -> use 'flight' icon
 // Otherwise fall back to category icon mapping
 var getEvIcon = function(ev) {
-  var name = (ev.name || '').toLowerCase() + ' ' + (ev.name_en || '').toLowerCase();
-  if (name.match(/airport|flight|landing|takeoff|airplane/)) return 'flight';
+  // ev.name is a nested i18n object — concatenate ALL its values for keyword matching,
+  // so the flight detector works regardless of which lang the event was authored in.
+  var name = Object.values(ev.name || {}).join(' ').toLowerCase();
+  if (name.match(/airport|flight|landing|takeoff|airplane|機場|空港|공항/)) return 'flight';
   var CAT_ICONS = {attraction:'attractions', food:'restaurant', cafe:'coffee',
     transport:'directions_transit', work:'laptop_mac', hotel:'hotel', shopping:'shopping_bag',
     personal:'bedtime'};
@@ -433,7 +384,7 @@ Research weather forecasts during Phase 4 (Deep Research) and hardcode as `WEATH
 ```js
 const WEATHER_DATA = [
   { date:'2026-03-30', icon:'rainy', hi:14, lo:9,
-    desc:{zh:'陣雨',en:'Showers',ko:'소나기',ja:'にわか雨'},
+    desc:{zh:'陣雨'},   // single-lang default. Multi-lang: add more keys (en/ja/ko) only when supportedLangs has them.
     sunrise:'06:22', sunset:'18:40', city:'busan' },
   // ... one entry per trip day
 ];
@@ -500,6 +451,7 @@ Mobile Bottom Bar (Tab Bar):
   Do NOT use stopPropagation on menu containers -- only on the toggle button itself.
 - Language toggle inside the More menu: clicking "Language" opens the language sub-menu;
   clicking any language option switches lang, closes lang menu, closes More menu.
+  **Hide the "Language" entry entirely when `TRIP.supportedLangs.length <= 1`** (single-lang mode, the default).
 - Tapping the More button closes any open lang menu first, then toggles the More menu.
 
 Schedule / Calendar Tab:

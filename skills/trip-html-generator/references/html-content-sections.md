@@ -231,11 +231,10 @@ It consists of four sections: animated city map, budget review, missed attractio
             "date": "2026-04-02",
             "day": 3,
             "type": "swap",
-            "description": "Swapped Taejongdae (outdoor) with ARTE Museum (indoor)",
-            "description_en": "Swapped Taejongdae (outdoor) with ARTE Museum (indoor)",
-            "reason": "rain",
+            "description": { "zh": "Swapped Taejongdae (outdoor) with ARTE Museum (indoor)" },
+            "reason": { "zh": "rain" },
             "impact": "positive",
-            "lesson": "Always have indoor backup for outdoor days"
+            "lesson": { "zh": "Always have indoor backup for outdoor days" }
           },
           {
             "date": "2026-04-03",
