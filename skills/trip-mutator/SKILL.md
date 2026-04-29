@@ -36,16 +36,23 @@ If `data/trip.json` does NOT exist in cwd or any sibling folder, fall back to `t
 
 ## Workflow
 
-### Step 1 — Locate the trip folder
+### Step 1 — Locate the trip folder (MANDATORY FIRST ACTION)
 
-Run from cwd:
+**Before doing anything else — before responding, before reading other files, before asking the user any question — you MUST run this command:**
+
 ```bash
 find . -maxdepth 3 -path '*/data/trip.json' 2>/dev/null | head -5
 ```
 
-- 0 results → tell user "I don't see an existing trip plan. Did you mean to start a new plan?" and stop.
-- 1 result → use it.
-- 2+ results → `AskUserQuestion`, list folders, let user pick.
+This is non-negotiable. Do not skip this step. Do not guess the folder from chat history. Do not assume "the trip folder is probably named X". The trip folder name is NOT predictable from the user's message — they may have multiple trips in cwd, may have renamed folders, may be in a different cwd than last session.
+
+**Interpret the result:**
+
+- **0 results** → No trip plan exists. Stop the mutation flow. Tell the user: "I don't see an existing `data/trip.json` in this directory. Did you mean to start a new plan? (I can hand off to `trip-planner`.)" Do NOT fabricate a folder.
+- **1 result** → Use that folder. Echo the absolute path back to the user in one line: "Editing `<abs-path>`."
+- **2+ results** → Invoke `AskUserQuestion` with the folder list. Do NOT guess based on the trip name in the user's message — they may have ambiguous names (`tokyo-2026/` and `tokyo-2027/`). Always ask.
+
+If `find` itself fails (permission errors, weird shell), tell the user explicitly rather than proceeding blind.
 
 ### Step 2 — Classify the mutation
 

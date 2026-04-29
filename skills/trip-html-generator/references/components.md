@@ -502,3 +502,237 @@ Plus `.claude/launch.json`:
 Tell the user: `python3 serve.py`, then open `http://localhost:8765`.
 
 Note: `index.html` also embeds a `<script id="trip-data" type="application/json">` fallback so the page works under `file://` too — but the dev server is the recommended path.
+
+---
+
+# Per-Tab Layout Skeletons
+
+The structural skeleton for each of the 7 tabs. These describe element nesting and required class names. **Visual styling (colors, spacing, typography) comes from Tailwind utilities + CSS variables**; do NOT hardcode pixel values here unless the spec calls them non-negotiable. See [layout-blueprint.md §Non-Negotiable Design Rules](layout-blueprint.md).
+
+## Tab 1 — Overview (`#tab-attractions`)
+
+Landing page: trip summary + today's plan + 14-day weather strip.
+
+```
+├── .hdr (header row: h1 + meta + desc on left, export button on right)
+│   NO hero banner. Starts directly with compact h1.
+├── #stats-bar (4-col grid, inverted black bg)
+│   └── .st × 4 (label → big number → subtitle)
+│       Stats show ACTUAL spending when available, "–" otherwise:
+│       - "Total Spent" — sum of actual_expenses + purchased items
+│       - "POI Count"
+│       - "Daily Avg" — total ÷ trip days (excl. flights/hotel)
+│       - "Work Days" (nomad mode) or other relevant stat
+├── #info-box (seasonal info — cherry blossom dates, festivals, etc.)
+├── #time-countdown (countdown timer, ticks every second)
+├── #today-card (today's itinerary — see §Today Card above)
+└── #weather-strip (14-day horizontal scroll — see §Weather Strip above)
+```
+
+**Weather strip per-day card structure:**
+```
+.weather-day (one card per trip day, .today gets stronger border)
+├── day number (D1–DN)
+├── date
+├── Material weather icon
+├── hi/lo temp
+├── desc (i18n)
+├── sunrise (wb_twilight icon) / sunset (nightlight icon)
+├── golden hour time (photo_camera icon)
+└── city row: .wd-city-dot + .wd-city-label
+    City color injected via --city-color CSS var from TRIP.cities[].color.
+    NEVER write per-city CSS rules (.wd-city-busan etc.) — validator blocks them.
+```
+
+City label reflects the city the traveler is in **on that date** (read from `TRIP.weather[].city`, not assumed from header).
+
+## Tab 2 — Spots / Map (`#tab-time`)
+
+Full-height map + filterable POI list. No `.hdr`.
+
+```
+├── #poi-filters (row of .chip buttons — flush to top, no margin)
+│   Filters: category + city + crowd-level + party-size (if food POIs).
+└── .attr-layout (2-col grid: map left, POI list right, height calc(100vh - 120px))
+    ├── #map (Leaflet, flex:1, min-height:0)
+    │   CartoDB Voyager tiles. L.circleMarker per category. L.layerGroup for filter clearing.
+    │   "Export to Google Maps" button overlay (bottom-right).
+    └── #poi-list (scrollable)
+        └── .poi (row: cat dot + info + Maps link + crowd badge + warning if any)
+            Click → openPOIModal(id) → see §POI Detail Modal above.
+```
+
+**Mobile (`<768px`):** stack vertically (filters → map → list). After POI click, scrollIntoView the map (Non-Negotiable Rule #23).
+
+## Tab 3 — Calendar (`#tab-calendar`)
+
+Day-by-day grid with timezone-aware live clocks + now line.
+
+```
+├── .cal-header-row (title + #clock-dest + #clock-home — see §Live Clocks)
+├── #calendar-desktop (visible >=768px)
+│   ├── .cal-header (8-col grid: time corner + 7 day headers)
+│   │   └── .cal-day-hdr × 7 (day name uppercase + large serif number)
+│   │       Today gets inverted black bg.
+│   └── .cal-grid (8-col grid: time labels + 7 day columns, scrollable)
+│       ├── time column (.cal-time-slot, 60px height per hour)
+│       └── day columns (.cal-day-col, position:relative)
+│           ├── hour grid lines (1px border-bottom per hour)
+│           ├── .cal-event (absolute, top=(sh-HOUR_START)*60, height=(eh-sh)*60)
+│           │   ├── .ev-title (event name)
+│           │   ├── .ev-time (sh–eh)
+│           │   ├── crowd badge top-right (LOW/MED/HIGH dot)
+│           │   ├── party-size icon for food (person/groups/warning)
+│           │   ├── reservation warning if "needed"
+│           │   └── booking_url link if any
+│           └── .cal-now-line (red, only on today's column — see §Now Line)
+└── #calendar-mobile (visible <768px)
+    └── .cal-m-day (flex: date left, events list right)
+        ├── .cal-m-date (day name + large number, today inverted)
+        └── .cal-m-events
+            └── .cal-m-event (3px black bar left + title + time + restaurant + map link)
+```
+
+Drag events between days = HTML5 drag-and-drop. Resize handle at bottom of each event for duration.
+
+## Tab 4 — Booking (`#tab-booking`)
+
+Confirmed bookings + ticket comparison + recommended buys. **Fully data-driven from `TRIP.booking`** — no hardcoded HTML.
+
+```
+├── .hdr (title: t('tab.booking') + subtitle)
+├── #flight-intel (flight intelligence card — see flight-intelligence skill output schema)
+├── .booking-section
+│   ├── .booking-section-title (checklist icon + t('label.booked'))
+│   └── #booking-purchased (renderBooking() fills innerHTML)
+│       Renders TRIP.booking.purchased[] as .booked-card items by type:
+│       - flight → see §Booking Tab: Flight Card above (full-width with outbound + return)
+│       - ferry → .booked-card with depart/arrive maps + price
+│       - hotel → .booked-card with dates + nightly + total + map
+│       - activity → .booked-card with desc + meetup + map
+│       Badge: .booked-badge.done (confirmed) / .booked-badge.pending
+├── .booking-section
+│   ├── .booking-section-title (sell icon + t('label.compare'))
+│   └── #booking-compare (renderBooking() fills innerHTML)
+│       TRIP.booking.compare[] → .booking-table-wrap > .booking-table
+│       Columns: name | official | klook | kkday | verdict
+│       Best price gets <span class="best-price">{price} ★</span>
+├── .booking-section
+│   ├── .booking-section-title (t('label.recommended'))
+│   └── #booking-recommended (renderBooking() fills innerHTML)
+│       TRIP.booking.recommended[] → .recommend-grid > .recommend-item (name + note)
+└── #holiday-calendar (host-country holiday list for the trip period)
+```
+
+**`renderBooking()` contract:** read `TRIP.booking`, populate the four mount points. Do not render anything if `TRIP.booking` is missing (graceful empty state).
+
+**`TRIP.booking` schema:**
+```json
+"booking": {
+  "purchased": [
+    {
+      "id": "bk1",
+      "type": "flight | ferry | hotel | activity",
+      "name": { "zh": "..." },
+      "status": "confirmed | pending",
+      "price": "NT$19,600", "price_twd": 19600,
+      // type-specific fields:
+      "carrier": "...", "carrier_code": "IT",
+      "segments": [ /* see Flight Card spec above */ ],
+      "dates": "3/30–4/3", "price_per_night": "NT$706/晚",
+      "departure": { "city": { "zh": "..." }, "terminal": "...", "time": "20:00", "maps": "..." },
+      "arrival":   { "city": { "zh": "..." }, "terminal": "...", "time": "07:30+1", "maps": "..." },
+      "checkin_url": "...", "checkin_note": { "zh": "Opens 48hr before" },
+      "desc": { "zh": "..." }, "meetup": "...", "maps_url": "..."
+    }
+  ],
+  "compare": [
+    {
+      "id": "cmp1",
+      "name": { "zh": "..." }, "name_note": { "zh": "..." },
+      "prices": { "official": "₩12,000", "klook": "₩12,000", "kkday": "₩7,200" },
+      "best": "kkday",
+      "verdict": { "zh": "KKday 省 40%" }
+    }
+  ],
+  "recommended": [
+    { "id": "tb1", "name": { "zh": "eSIM" }, "note": { "zh": "..." } }
+  ],
+  "passes": [ /* city passes — coverage, price, validity, worth-it calculation */ ]
+}
+```
+
+## Tab 5 — Budget (`#tab-budget`)
+
+Estimated/Actual toggle + horizontal bar charts + line items.
+
+```
+├── .hdr (t('tab.budget'))
+├── #budget-mode-toggle (pill toggle: [Estimated] [Actual])
+├── #budget-total (single column inverted-black total panel + currency switcher)
+│   Label: "Estimated Total" or "Actual Total" depending on mode
+├── #budget-by-city (horizontal bar chart, .h-bars > .h-bar-row per city)
+│   Estimated: from budget.items[].city
+│   Actual: from purchased + actual_expenses[].items[].city
+├── #budget-by-cat (horizontal bar chart, .h-bars > .h-bar-row per category)
+│   Categories: hotel, food, transport, attraction, shopping, cafe, other, personal
+│   NOTE: Use horizontal bars, NOT card grids (Non-Negotiable Rule #15).
+└── #budget-detail
+    Estimated mode:
+    └── .items-table-wrap (flat list: item + city + cost columns, no checkboxes)
+    Actual mode:
+    ├── .items-table-wrap "Pre-purchased" (budget.items where purchased:true)
+    │   └── .item-row × N (cat icon + name + cost)
+    └── .items-table-wrap × dates (one per actual_expenses[] entry)
+        ├── header: date + day total
+        └── .item-row × N (cat icon + name + cost + city pill)
+```
+
+**Stats card (`stat-total`) MUST always show actual spending** when actual data exists. Both `renderBudgetEstimated()` and `renderBudgetActual()` update `stat-total`. Estimated mode falls back to estimated total only if no actual data exists.
+
+## Tab 6 — Checklist (`#tab-checklist`)
+
+Entry forms + pre-trip checklist + nomad workspaces (if nomad mode).
+
+```
+├── .hdr (t('tab.checklist'))
+├── #entry-forms
+│   └── .entry-form-card × N (per country)
+│       ├── .ef-title (flag emoji + country name)
+│       └── .ef-fields (label + value pairs — passport pre-fill data)
+├── #checklist-groups (auto-fill grid, border frame)
+│   └── .check-group × N
+│       ├── .cg-title (with 2px bottom border)
+│       └── .cl-item × N (checkbox + label + optional ↗ link)
+│           Checked items: muted color + strikethrough
+└── #nomad-workspaces (only renders if trip has work days)
+    ├── .nomad-head (work icon + title + date range)
+    └── .nomad-spot × N (name + addr Maps link + tags pills + coverage)
+```
+
+Tags resolved via `t(tagKey)` — e.g. `nomad_free`, `nomad_wifi`, `nomad_power`.
+
+## Tab 7 — Retro (`#tab-retro`)
+
+Post-trip retrospective. **Hidden until `new Date() >= new Date(TRIP.endDate)`** (Non-Negotiable Rule #5). On the last trip day, optionally show prompt: "Trip ending! Start your retro?"
+
+```
+├── .hdr (t('tab.retro'))
+├── #retro-map (per-city Leaflet maps with route overlays)
+│   ├── .retro-city-selector (pill buttons: one per city)
+│   └── .retro-map-container (Leaflet, category-colored markers + dashed polylines per day)
+├── #retro-budget-review
+│   ├── header (verdict badge — under/over/on budget)
+│   ├── estimated vs actual side-by-side bars
+│   ├── highlights (what went well — green cards)
+│   └── overruns (where you overspent — amber cards with reasons)
+├── #retro-missed
+│   ├── header ("For Next Time")
+│   ├── missed POIs list (planned but not visited; reason skipped; save-for-next-trip action)
+│   └── AI-generated next-trip suggestions
+├── #retro-changelog (vertical timeline of plan modifications during trip)
+│   └── .retro-change-item × N (date + what changed + why + impact)
+└── #retro-lessons (AI-generated planning lessons)
+```
+
+All retro text fields are nested i18n objects: `description`, `reason`, `lesson`, `suggestion`, `note` (see [layout-blueprint.md §i18n Completeness](layout-blueprint.md)).
