@@ -31,7 +31,7 @@ You are a world-class travel planner that creates interactive, self-contained HT
 | 2     | Recommend attractions (interactive selection) | [phase-2-attractions.md](references/phase-2-attractions.md) |
 | 3     | Plan day-by-day routes + transit + entry forms | [phase-3-routes.md](references/phase-3-routes.md) |
 | 4     | Deep research (prices, hours, crowd, dining, etc.) | [phase-4-deep-research.md](references/phase-4-deep-research.md) |
-| 4.5   | UI style + route efficiency audit + final confirmation gate | [phase-4_5-style-and-audit.md](references/phase-4_5-style-and-audit.md) |
+| 4.5   | Route efficiency audit + final confirmation gate (UI style is deferred to post-Phase-5) | [phase-4_5-style-and-audit.md](references/phase-4_5-style-and-audit.md) |
 | 5     | Generate HTML | hand off to `trip-html-generator` skill |
 | 6     | Deploy as a live website | hand off to `trip-deployer` skill |
 
@@ -58,7 +58,7 @@ The Phase 4.5 final confirmation gate is in [phase-4_5-style-and-audit.md](refer
 
 ## Phase 5: Generate the HTML
 
-Hand off to the `trip-html-generator` skill. Pass all confirmed data: itinerary, POIs, budget, transit, research results, chosen UI style. The generator handles the multi-file folder output (HTML/CSS/JS/JSON), layout blueprint, interactive features, and tab content.
+Hand off to the `trip-html-generator` skill. Pass all confirmed data: itinerary, POIs, budget, transit, research results. The generator uses the **Swiss Minimalist default style** unless the user volunteered a different preference earlier. After generation completes, offer the user a restyle. The generator handles the multi-file folder output (HTML/CSS/JS/JSON), layout blueprint, interactive features, and tab content.
 
 **The generator follows a strict template contract: `index.html` and `app.js` must NOT contain trip-specific strings, prices, or city names. Everything is driven by `data/trip.json`.** See [trip-html-generator/references/template-contract.md](../trip-html-generator/references/template-contract.md).
 

@@ -47,7 +47,7 @@ Tab content rendering details live in [components.md](components.md) and [html-c
 
 ## Design Tokens (CSS variables)
 
-The Phase-4.5 UI-style pack provides these tokens. The shell defaults to Swiss Minimalist values:
+**Default style: Swiss Minimalist** — international typographic style, grid precision, red accent, **zero rounded corners**, Notion/Linear aesthetic. The shell ships with these tokens:
 
 ```css
 :root {
@@ -56,9 +56,9 @@ The Phase-4.5 UI-style pack provides these tokens. The shell defaults to Swiss M
   --text: #0A0A0A;
   --muted: #71717A;
   --border: #E4E4E7;
-  --accent: #DC2626;          /* Single accent — UI-style overrides */
+  --accent: #DC2626;          /* Swiss red */
   /* Layout */
-  --r: 24px;                  /* Card radius — pills use 999px directly */
+  --r: 0px;                   /* Swiss = 0 radius. Pills still use 999px directly. */
   --pad: 24px;                /* Section padding */
   --col-gap: 16px;
   /* Type */
@@ -67,6 +67,8 @@ The Phase-4.5 UI-style pack provides these tokens. The shell defaults to Swiss M
   --city-color: #6B7280;      /* Default fallback */
 }
 ```
+
+When the user opts into a different UI-style pack (after the trip is generated, see [phase-4_5-style-and-audit.md](../../trip-planner/references/phase-4_5-style-and-audit.md)), that pack overrides these tokens by rewriting `:root` in `style.css`. Swiss is the default because it pairs well with calendar/itinerary density.
 
 Tailwind theme extension (in `<head>`, see [cdn-and-styling.md](cdn-and-styling.md)) re-exports these as `bg-paper`, `text-ink`, `bg-accent`, `rounded-DEFAULT`, `font-sans`. Use those utilities in markup; never hardcode hex values.
 
@@ -122,7 +124,7 @@ These survive every UI-style choice. Style packs cannot override them.
 
 1. **NO hero banner** — no top splash image, no hero `<img>`. Page starts with a compact h1 + meta + desc.
 2. **Stats bar is inverted** — black bg + white text, immediately after the header.
-3. **Cards have border-radius `var(--r)`** — defaults 24px; UI-style packs may set this to 0 (Swiss) or other.
+3. **Cards have border-radius `var(--r)`** — defaults 0 (Swiss). UI-style packs may set this to 24px (Botanical, Organic) or other values when the user opts in.
 4. **Chips are pills** (`rounded-full`), never rectangles.
 5. **Vibrant color appears only in category indicators** — UI chrome is neutral.
 6. **Hover is subtle** — border or shadow change, never color change.

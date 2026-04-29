@@ -34,23 +34,74 @@ Generate a trip planner app as a **multi-file folder structure** (`index.html` +
 
 ---
 
-## Generation Order
+## Generation Order — READ BEFORE TOUCHING ANY FILE
 
-**Do NOT write all four files in one shot — that causes timeouts.** Follow the incremental flow in [phase-5-generation-strategy.md](references/phase-5-generation-strategy.md):
+**Phase 5 is incremental. Generating in one shot causes 15+ minute timeouts and silent failures. This is the rule, not a suggestion.**
 
-0. **Determine output path:** `{cwd}/{destination-slug}-{year}/`. Run `pwd`, confirm with user. NO bracket-corrupted paths, NO invented parent folders.
-1. **Build `data/trip.json` in 5 sections (B1–B5):** skeleton → i18n → POIs → schedule → auxiliary. Run `validate-trip.mjs --schema-only` after each.
-2. **Generate `app.js` in 8 function groups (C1–C8) via Edit-append:** bootstrap → Today/Overview → Calendar → Spots/Map → Booking → Budget → Checklist/Retro → Export. Do NOT re-Write the whole file each time.
-3. **Copy `index-skeleton.md` verbatim** to `index.html`. Replace `__TRIP_JSON__` with the JSON-stringified trip payload (same bytes as `data/trip.json`). Include the three CDN tags from [cdn-and-styling.md](references/cdn-and-styling.md).
-4. **Generate `style.css`** — minimal, mostly empty. Tailwind handles 90% of styling. Custom CSS only for the exceptions listed in [cdn-and-styling.md](references/cdn-and-styling.md) and the Phase-4.5 UI-style pack's distinctive treatment.
-5. **Run the full validator.** MUST exit 0 before reporting the trip as generated.
+### Hard limits (the validator and your own size sense both enforce these)
 
+| File | One-shot Write OK? | Hard ceiling per Write/Edit | Strategy |
+|------|---------------------|------------------------------|----------|
+| `data/trip.json` | ❌ Never | ~400 lines per section | 5 sections (B1–B5), `Write` once for B1, then `Edit` to append per section |
+| `app.js` | ❌ Never | **800 lines per call** | 8 function groups (C1–C8), `Write` once for C1, then `Edit` append per group. **If a single Write/Edit exceeds 800 lines you're doing it wrong — split it.** |
+| `index.html` | ✅ Once | ~400 lines | Copy `index-skeleton.md` verbatim, fill `__TRIP_JSON__` |
+| `style.css` | ✅ Once | ~200 lines | Mostly empty — Tailwind handles 90% |
+
+### Required sequence (do not deviate)
+
+**Step 0 — Confirm output path.** Run `pwd`, propose `{pwd}/{destination-slug}-{year}/`, ask user. Then `mkdir -p <path>/data <path>/.claude`.
+
+**Step 1 — Announce the plan to the user.** In one short message, list the steps you will take and the order:
+> "I'll generate the trip in 14 steps: B1–B5 (trip.json sections) → C1–C8 (app.js groups) → D (index.html + style.css). Each step writes a file or appends to one, then I run schema-only validator. Starting B1 now."
+
+This announcement is **mandatory**. It commits you publicly to the incremental flow and lets the user interrupt if you start drifting.
+
+**Step 2 — Execute B1 → B5** (build `data/trip.json`). Each sub-step:
+- B1: skeleton (`lang`, `supportedLangs`, `destination`, `startDate`, `endDate`, `currency`, `cities[]`, empty `i18n{}`, empty `pois:[]`, empty `schedule:[]`)
+- B2: `i18n.{lang}.{key}` for every required UI key (see `app-skeleton.md`)
+- B3: `pois[]` with full nested-i18n `name`/`desc`, `lat`, `lng`, `cat`, `city`
+- B4: `schedule[]` day-by-day events
+- B5: `weather[]`, `budget`, `booking`, `entryForms`, `flightIntel`, `retro`
+
+After EACH B-step:
+1. Update `_progress.phase5_step = "B<N>"` and `_progress.updated_at`
+2. Run `node skills/trip-html-generator/scripts/validate-trip.mjs <folder> --schema-only`
+3. **If validator fails, fix and re-run before moving on.** Do not proceed with cascading errors.
+
+**Step 3 — Execute C1 → C8** (build `app.js`).
+- C1: `Write` the entire bootstrap (`bootstrap`, `t()`, `L()`, `cityById()`, `bindLanguageSwitcher`, `bindTabs`, `showTab`, `applyLang`, `fmtMoney`, `injectCityVars`) — this is the only `Write` for app.js.
+- C2–C8: each is an `Edit` that appends one render group to the END of app.js. Use `old_string` = the last few lines currently in the file, `new_string` = those same lines + the new group.
+- **Never re-`Write` app.js after C1.** Edit-append only.
+- **No single C-step Edit may exceed 800 lines of new code.** If a render group is bigger, split it into C2a/C2b.
+- Update `_progress.phase5_step = "C<N>"` after each.
+
+**Step 4 — D (index.html + style.css).**
+- Copy `index-skeleton.md` verbatim → `index.html`. Replace `__TRIP_JSON__` with stringified `trip.json`.
+- Generate minimal `style.css` (50–200 lines). Custom CSS only for the exceptions in `cdn-and-styling.md`.
+- Update `_progress.phase5_step = "D"`.
+
+**Step 5 — Final validator.** Full check, no `--schema-only`:
 ```bash
-node skills/trip-html-generator/scripts/validate-trip.mjs <trip-folder>                  # full check
-node skills/trip-html-generator/scripts/validate-trip.mjs <trip-folder> --schema-only    # mid-build check
+node skills/trip-html-generator/scripts/validate-trip.mjs <folder>
 ```
+Must exit 0. Fix any failures.
 
-**Track progress** in `data/trip.json._progress.phase5_step` so an interrupted run can resume. See [phase-5-generation-strategy.md §E](references/phase-5-generation-strategy.md) and [trip-planner/references/checkpoint.md](../trip-planner/references/checkpoint.md).
+### Self-check before each Write/Edit
+
+Before calling `Write` or `Edit`, ask yourself:
+- Is this Write/Edit > 800 lines of new content? → STOP. Split it.
+- Am I about to re-`Write` `app.js` after C1? → STOP. Use `Edit` to append.
+- Did I update `_progress.phase5_step` after the last step? → If not, do it before this one.
+- Has the schema-only validator run since the last B-step? → If not, run it now.
+
+### When to consult the longer doc
+
+Most LLMs don't need to open `phase-5-generation-strategy.md` — the rules above are sufficient. Open it ONLY if:
+- A B/C step's content is unclear (which fields go in B3 vs B5? what's in C5?)
+- You need the resume-from-checkpoint logic
+- You're debugging a mid-Phase-5 failure
+
+Track progress in `data/trip.json._progress.phase5_step` for resume. Schema defined in [trip-planner/references/checkpoint.md](../trip-planner/references/checkpoint.md).
 
 ---
 
@@ -159,3 +210,15 @@ If the validator reports failures: regenerate the offending file. Do not ship a 
 External deps (CDN): Tailwind, Leaflet + CartoDB Voyager basemap, Google Fonts (Noto Sans + Material Symbols). All listed in [cdn-and-styling.md](references/cdn-and-styling.md).
 
 Tell the user the absolute folder path and run instructions: `python3 serve.py` → `http://localhost:8765`.
+
+---
+
+## After Phase 5 Completes — Offer a Restyle
+
+Default style is **Swiss Minimalist** (clean grid, red accent, zero rounded corners). After the trip is generated AND validator is green, offer the user the option to switch styles now that they can see the result:
+
+> "Trip is live at `http://localhost:8765` with the **Swiss Minimalist** style (the default). Want to keep it, or try a different style? Travel-friendly options: Luxury Editorial, Botanical, Newsprint, Professional Serif, Academia, Organic, Monochrome."
+
+If the user wants a different style: hand off to the `ui-style` skill, read the chosen style's reference, then **rerun ONLY Phase 5 step D** (regenerate `style.css` from the new design tokens). `trip.json`, `app.js`, and `index.html` stay untouched. This is fast — usually under a minute.
+
+If the user is happy with Swiss: do nothing more. The trip is done.

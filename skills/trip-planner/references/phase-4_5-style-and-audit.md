@@ -1,52 +1,29 @@
-# Phase 4.5 — UI Style + Final Audit
+# Phase 4.5 — Final Audit (UI style is deferred to post-generation)
 
-Two parallel sub-phases before Phase 5 (HTML generation):
+Phase 4.5 used to ask the user to pick a UI style here. **It no longer does.** Asking for a style before the user can see what the trip looks like is decision fatigue — the user has just spent ~15 minutes on logistics, attractions, routes, and deep research; another design question right before generation slows everything down without helping them choose well.
 
-1. **Pick UI style**
-2. **Run mandatory route efficiency audit**
+**New flow: ship Swiss Minimalist by default, offer restyle after they see it.**
 
 ---
 
-## A. UI Style Selection
+## A. UI Style — Use the Default, Skip the Question
 
-Invoke the `ui-style` skill. **Use the travel-suitable subset** defined in [ui-style/SKILL.md §Recommending a Style → Travel-suitable styles](../../ui-style/SKILL.md). Do NOT show all 30 styles — most clash with itinerary density.
+**Do NOT invoke the `ui-style` skill at this phase. Do NOT ask the user about styles.** Phase 5 generates with the Swiss Minimalist design tokens already baked into [trip-html-generator/references/layout-blueprint.md §Design Tokens](../../trip-html-generator/references/layout-blueprint.md).
 
-**Present with `AskUserQuestion`** — pick 4 from the travel-suitable list, plus "Other" for full catalog:
+Swiss Minimalist (the default):
+- Clean grid, generous whitespace
+- Red accent (`#DC2626`)
+- **Zero rounded corners** (`--r: 0px`)
+- Notion/Linear aesthetic
+- Pairs well with calendar/itinerary information density
 
-```
-question: "What style do you want for the HTML?"
-options:
-  - label: "Swiss Minimalist (default)"
-    description: "Clean grid, red accents, zero rounded corners — Notion/Linear aesthetic"
-  - label: "Luxury Editorial"
-    description: "High-end magazine feel, gold accents, serif fonts, grayscale photos"
-  - label: "Botanical / Organic"
-    description: "Nature-inspired, sage green + terracotta, rounded shapes, paper texture"
-  - label: "Newsprint"
-    description: "Newspaper layout, multi-column, drop caps, vintage print feel"
-  - label: "Other (show full travel-suitable list)"
-    description: "Pick from the 8 travel-friendly styles"
-multiSelect: false
-```
+After Phase 5 completes successfully and the user has reviewed the live HTML (running `python3 serve.py`), THEN offer a restyle:
 
-**If user picks "Other":** show the remaining 4 travel-suitable styles (Professional Serif, Academia, Organic, Monochrome) and let them pick. Only fall back to the full 30-style catalog if the user explicitly asks ("show me everything", "I want cyberpunk for fun"). Then warn that non-travel styles may compromise readability.
+> "The trip is generated and live at `http://localhost:8765`. The current style is **Swiss Minimalist** (the default — clean grid, red accents, no rounded corners). Want to keep this style, or try a different one? I can apply Luxury Editorial, Botanical, Newsprint, Professional Serif, Academia, Organic, or Monochrome — all designed to work with travel itineraries."
 
-**After selection:**
-1. Read the corresponding reference from `ui-style` skill's `references/`
-2. Extract palette, typography, border radius, shadows, signature elements
-3. Replace default design tokens in Phase 5 generation
-4. Adapt layout to match the style's component patterns and anti-patterns
+If the user picks a different style, it's a Phase-5-step-D rerun (style.css only) — not a full regeneration. Hand off to `ui-style` skill at that point. Trip data stays intact.
 
-**Style adaptation rules:**
-- **Layout structure** (sidebar + tabs + sections) stays the same regardless of style
-- Only **visual treatment** changes: colors, fonts, radius, shadows, spacing, hover effects
-- Respect **anti-patterns** (e.g., "no rounded corners" → don't use them)
-- Apply **signature elements** — what makes the style distinctive
-- The reference file is authoritative — read it fully before generating
-
-**If user says "use default" or doesn't care:**
-- Use the existing Swiss Minimalist / Notion-like system in the layout blueprint
-- Black/white/gray, system fonts, inverted black stats bar, minimal shadows, 24px radius cards. The DEFAULT.
+**Override rule:** if the user volunteers a preference earlier in the conversation ("I want it to look like a magazine", "make it dark", "Newsprint please"), respect it — apply that style at Phase 5 generation instead of the Swiss default. But do NOT proactively ask.
 
 ---
 
