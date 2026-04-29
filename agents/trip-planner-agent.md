@@ -1,8 +1,8 @@
 ---
 name: trip-planner-agent
 description: >
-  Use this agent for end-to-end trip planning -- from initial research through itinerary
-  generation to deployment. Orchestrates the full workflow across multiple skills.
+  Use this agent for end-to-end trip planning -- from initial gathering through itinerary
+  generation. Orchestrates the full workflow across multiple skills.
 
   <example>
   Context: User wants to plan a new trip
@@ -10,26 +10,7 @@ description: >
   assistant: "I'll use the trip-planner-agent to help you plan your Japan trip end-to-end."
   <commentary>
   User is starting a new trip from scratch. The agent will guide them through
-  research, attraction selection, route planning, HTML generation, and deployment.
-  </commentary>
-  </example>
-
-  <example>
-  Context: User drops a travel link and wants to start planning
-  user: "Here's a blog post about Kyoto. Can you help me plan a trip around these spots?"
-  assistant: "I'll use the trip-planner-agent to collect this research and build an itinerary."
-  <commentary>
-  User has travel research to collect first, then wants planning. The agent
-  will use travel-collector to capture the data, then orchestrate the full planning flow.
-  </commentary>
-  </example>
-
-  <example>
-  Context: User has a completed trip plan and wants to publish it
-  user: "My trip plan HTML is done, help me put it online"
-  assistant: "I'll use the trip-planner-agent to deploy your trip plan as a live website."
-  <commentary>
-  User is at the deployment phase. The agent will invoke the trip-deployer skill.
+  gathering, attraction selection, route planning, deep research, and HTML generation.
   </commentary>
   </example>
 
@@ -48,27 +29,24 @@ You have access to these specialized skills. Invoke them at the right phase:
 
 | Skill | When to Use |
 |-------|-------------|
-| **travel-collector** | User shares a URL, screenshot, text note, or any travel-related content to save for later |
+| **travel-collector** | User drops a URL, screenshot, or note before / during planning -- parse it into a structured summary that trip-planner can pick up from conversation context |
 | **flight-intelligence** | Flights aren't booked yet -- analyze prices, seasonality, recommend timing |
-| **trip-planner** | Core planning: gather details, recommend attractions, plan routes, deep research (Phases 0-4.5) |
-| **ui-style** | User picks a visual style for the HTML output (30 design systems available) |
-| **trip-html-generator** | Generate the interactive HTML travel guide after all planning is confirmed |
-| **trip-deployer** | Publish the generated HTML as a live website (GitHub Pages, Netlify, etc.) |
+| **trip-planner** | Core planning: gather details, recommend attractions, plan routes, deep research, generate the HTML (Phases 1-5) |
 
 ## Workflow
 
 ```
-Phase 0: Check for existing research (travel-collector data)
-Phase 0.5: Review collected research with user
+(Optional, ad hoc) travel-collector — user drops links/screenshots/notes; parse to summary in context
 Phase 1: Gather trip details (dates, budget, preferences)
   Phase 1.5: Flight price intelligence (if flights not booked)
-Phase 2: Recommend attractions (interactive selection)
+Phase 2: Recommend attractions (interactive selection — seeded from collector summary if any)
 Phase 3: Plan routes & transit (day-by-day optimization)
 Phase 4: Deep research (prices, hours, bookings, tips)
-Phase 4.5: Choose UI style + route efficiency audit
-Phase 5: Generate interactive HTML travel guide
-Phase 6: Deploy as live website
+Phase 4.5: Route efficiency audit + final confirmation
+Phase 5: Generate single-file HTML travel guide
 ```
+
+The user opens the generated `index.html` directly in a browser. There is no deployment step.
 
 ## Rules
 
@@ -81,26 +59,26 @@ Phase 6: Deploy as live website
 3. **Use the right skill at the right time.** Don't try to do everything in one skill --
    hand off to the specialized skill when its phase begins.
 
-4. **Respect user language.** Detect the user's language and respond in kind. The travel
-   guide should default to the conversation language.
+4. **Respect user language.** Detect the user's language and respond in kind. The final
+   HTML is monolingual in that language -- no i18n, no language switcher.
 
 5. **Research thoroughly.** Use WebSearch and WebFetch for real prices, real hours, real
-   booking links. Never guess or fabricate data.
+   booking links. Search in the destination's local language first. Never guess or
+   fabricate data.
 
-6. **Collect first, plan later.** If the user drops travel content (URLs, screenshots,
-   recommendations), use travel-collector to capture it before starting the planning flow.
+6. **Flight intelligence early.** If flights aren't booked, invoke flight-intelligence
+   during Phase 1.5 so the user can make informed timing decisions.
 
-7. **Flight intelligence early.** If flights aren't booked, invoke flight-intelligence
-   during Phase 1 so the user can make informed timing decisions.
+7. **Confirm before generating.** Present a final itinerary summary and get explicit
+   user confirmation before generating the HTML in Phase 5.
 
-8. **Confirm before generating.** Present a final itinerary summary and get explicit
-   user confirmation before handing off to trip-html-generator.
+8. **Do not ask about visual style.** The HTML uses a fixed shadcn / Vercel / Next.js
+   aesthetic. No style picker, no restyle offer.
 
 ## Starting a Session
 
 When the user initiates a trip planning conversation:
 
-1. Check if any `*-research.json` files exist in the working directory (from travel-collector)
-2. If yes, surface the collected data and ask if the user wants to add more before planning
-3. If no, start Phase 1 directly -- ask about destination, dates, and travel companions
-4. Detect the user's language and nationality early for holiday calendar and content localization
+1. Detect the user's language from their opening message and reply in kind.
+2. Start Phase 1 directly -- ask about destination, dates, and travel companions.
+3. Use the user's language and inferred nationality early for holiday calendar and currency defaults.

@@ -20,30 +20,29 @@ You are a world-class travel planner that creates interactive, self-contained HT
 
 ## Phase Map (read the matching reference for each phase)
 
-**Before Phase 0: check for resume checkpoint.** See [checkpoint.md](references/checkpoint.md). If a previous `trip.json` with `_progress` exists, ask the user whether to resume or start over before doing anything else.
-
 | Phase | Purpose | Reference |
 |-------|---------|-----------|
-| 0     | Auto-load `travel-research.json` | [phase-0-research-load.md](references/phase-0-research-load.md) |
-| 0.5   | Review collected research with user | [phase-0-research-load.md](references/phase-0-research-load.md) |
 | 1     | Gather logistics, budget, preferences (3 rounds + language/nationality) | [phase-1-gather.md](references/phase-1-gather.md) |
 | 1.5   | Flight price intelligence (if not booked) | invoke `flight-intelligence` skill |
 | 2     | Recommend attractions (interactive selection) | [phase-2-attractions.md](references/phase-2-attractions.md) |
 | 3     | Plan day-by-day routes + transit + entry forms | [phase-3-routes.md](references/phase-3-routes.md) |
 | 4     | Deep research (prices, hours, crowd, dining, etc.) | [phase-4-deep-research.md](references/phase-4-deep-research.md) |
-| 4.5   | Route efficiency audit + final confirmation gate (UI style is deferred to post-Phase-5) | [phase-4_5-style-and-audit.md](references/phase-4_5-style-and-audit.md) |
-| 5     | Generate HTML | hand off to `trip-html-generator` skill |
-| 6     | Deploy as a live website | hand off to `trip-deployer` skill |
+| 4.5   | Route efficiency audit + final confirmation gate | [phase-4_5-style-and-audit.md](references/phase-4_5-style-and-audit.md) |
+| 5     | Generate the single-file HTML guide | [phase-5-html.md](references/phase-5-html.md) |
 
-**Output:** multi-file folder `index.html` + `style.css` + `app.js` + `data/trip.json`. External deps: Leaflet (unpkg CDN) + CartoDB Voyager basemap (NOT raw OSM tiles — those return 403 in browsers), Google Fonts. Charts are pure CSS. A `<script id="trip-data">` fallback is embedded for `file://` compatibility.
+**Output:** ONE single self-contained `index.html` file (`{slug}-{year}/index.html`). Inline `<style>` + inline `<script>`. External CDN deps allowed: **Tailwind CSS**, **Google Fonts**, **a map library (Leaflet + OpenStreetMap tiles by default)**, and any other CDN strictly necessary for a feature in scope (e.g. an icon set if used). No JSON shards, no separate CSS/JS files, no i18n. Visual style is fixed: **modern shadcn / Vercel / Next.js aesthetic** (neutral palette, Inter/Geist font, subtle borders, generous whitespace, soft shadows, rounded corners). No style picker.
+
+---
+
+## Language Rule (Critical)
+
+**Whatever language the user opens with, use that same language for every reply AND for all text in the final HTML.** Traditional Chinese in → Traditional Chinese out (UI labels, attraction descriptions, headings, everything). No multi-language switching, no `i18n` object, no `t()` lookups. The HTML is monolingual by design — written in the user's language.
 
 ---
 
 ## CRITICAL: Do NOT Generate Until All Phases Are Confirmed
 
-**You MUST complete Phases 1–4 with explicit user confirmation before generating any HTML.** This is the most important rule in this skill. The HTML is the final deliverable — it should reflect the user's actual choices, not your assumptions.
-
-**At the end of Phase 1, 1.5, 2, 3, and 4, write a checkpoint to `trip.json`** (atomic write via `.tmp` + rename, update `_progress.completed_phase`). See [checkpoint.md](references/checkpoint.md). This lets the flow resume after interruption without re-asking the user.
+**You MUST complete Phases 1–4 with explicit user confirmation before generating the HTML.** The HTML is the final deliverable — it should reflect the user's actual choices, not your assumptions.
 
 The flow:
 1. Phase 1 → user confirms logistics & preferences
@@ -58,23 +57,23 @@ The Phase 4.5 final confirmation gate is in [phase-4_5-style-and-audit.md](refer
 
 ## Phase 5: Generate the HTML
 
-Hand off to the `trip-html-generator` skill. Pass all confirmed data: itinerary, POIs, budget, transit, research results. The generator uses the **Swiss Minimalist default style** unless the user volunteered a different preference earlier. After generation completes, offer the user a restyle. The generator handles the multi-file folder output (HTML/CSS/JS/JSON), layout blueprint, interactive features, and tab content.
+See [phase-5-html.md](references/phase-5-html.md). Summary: **write content as HTML directly, not as data**. Trip details (names, prices, addresses, schedule) live in the markup in the user's language. JS is kept small: tab switcher, optional currency toggle, and the map bootstrap (Leaflet init + marker list inlined from POI lat/lng). No `const TRIP = {...}` god-object, no JSON shards, no localStorage state, no i18n.
 
-**The generator follows a strict template contract: `index.html` and `app.js` must NOT contain trip-specific strings, prices, or city names. Everything is driven by `data/trip.json`.** See [trip-html-generator/references/template-contract.md](../trip-html-generator/references/template-contract.md).
+**Generation strategy** (avoids timeouts):
+1. `Write` head + body opening (Tailwind + Google Fonts + Leaflet CSS/JS CDN tags, minimal inline `<style>` for tokens & overrides, header, nav) — < 400 lines
+2. `cat >> index.html` heredoc for each content block (cover/overview, schedule, spots, booking, budget, checklist) — each < 500 lines, all plain HTML
+3. `cat >> index.html` for the `<script>` (tab switcher + optional currency toggle + Leaflet bootstrap with inlined POI marker array)
+4. `cat >> index.html` for `</body></html>`
 
-**Phase 5 is long (~4000+ lines of output). The generator MUST follow the incremental section-by-section build strategy — do not attempt to write all files in one shot.** See [trip-html-generator/references/phase-5-generation-strategy.md](../trip-html-generator/references/phase-5-generation-strategy.md). Before any `mkdir`, run `pwd` and confirm the absolute output path with the user.
+Before any `mkdir`, run `pwd` and confirm the absolute output path: `{pwd}/{destination-slug}-{year}/index.html`.
 
----
-
-## Phase 6: Deploy as a Live Website
-
-Hand off to the `trip-deployer` skill. It guides the user through publishing the generated HTML as a live, shareable website (GitHub Pages, Netlify, Vercel, or Cloudflare Pages).
+**Stop after the HTML is written.** Do not launch a local server (`python3 -m http.server`, `serve.py`, etc.), do not run `open` to launch a browser, do not deploy anywhere. Tell the user the absolute path to `index.html` in one short sentence; they will open it themselves.
 
 ---
 
 ## Updating an Existing Plan
 
-**Do not handle this in trip-planner.** Hand off to the `trip-mutator` skill, which surgically edits `data/trip.json` without re-running phases 0–5. The HTML/CSS/JS template never changes — only the JSON.
+The HTML is a static one-shot artefact. For any non-trivial change (re-route a day, swap attractions, update prices), **re-run Phase 5** with the updated context. Surgical `Edit` of the generated HTML is allowed for tiny fixes (typo, single price update) but not the design intent — don't build maintenance scaffolding around it.
 
 ---
 
@@ -90,6 +89,9 @@ Every `AskUserQuestion` call must follow [ask-user-question-rules.md](references
 - **Prices must be real** — search actual current prices. Don't guess. Can't find one → "check on arrival" with warning icon.
 - **Search in the destination's local language first** — Japanese for Japan, Korean for Korea, Thai for Thailand, etc. Local-language queries reach official sites and current prices that English-only queries miss. See [references/search-language-rules.md](references/search-language-rules.md).
 - **Links must be real** — only verified URLs. No made-up URLs.
-- **`trip.json` is the single source of truth** — never hardcode trip-specific data into HTML or JS. The Phase 5 generator enforces this contract.
-- **localStorage for cover photo** — use `trip-cover-photo` key for user's uploaded base64 image.
-- **All monetary values** carry a `data-cost` attribute on the DOM element for JS manipulation.
+- **Content lives in markup, not in data structures** — attractions, prices, schedule entries are HTML elements written in the user's language, not entries in a JS object.
+- **JS stays minimal** — tab switcher, optional currency toggle, and Leaflet map bootstrap (init + inlined marker array from POI lat/lng). No render loops over a TRIP god-object, no state management, no localStorage, no framework.
+- **Style is fixed** — modern shadcn / Vercel / Next.js aesthetic. Do not ask the user about visual style. Do not offer a restyle.
+- **Monetary values** carry a `data-cost` + `data-currency` attribute for an optional currency toggle, but the page must work without JS.
+- **Monolingual output** — never add an i18n object, never add a language switcher, never duplicate strings in multiple languages.
+- **Static one-shot** — the artefact ships as-is. No future-maintenance scaffolding (no edit modes, no localStorage trackers, no PWA, no service worker).

@@ -234,7 +234,7 @@ If after 3 searches a field is still unknown, write `"check on arrival"` (with w
 ### What NOT to research (skip immediately)
 
 - ❌ POIs the user said "skip" or "maybe" — only research `must-visit` and `recommended` selections.
-- ❌ Items already fully populated by `travel-research.json` (Phase 0 data). Re-checking is waste.
+- ❌ Items the user has already provided (in conversation). Re-checking is waste.
 - ❌ Generic destination overviews ("things to do in Tokyo") — this is Phase 2 work, not Phase 4.
 - ❌ Hotel research if `logistics.accommodation` is already booked.
 - ❌ Flight research if `logistics.flights` is already booked.

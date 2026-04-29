@@ -10,16 +10,13 @@
   "plugins": [
     {
       "name": "trip-planner-skill",
-      "description": "Research, plan, generate HTML travel guides, and deploy -- includes trip planner, travel collector, flight intelligence, UI styles, HTML generator, and deployer.",
+      "description": "Research, plan, and generate self-contained HTML travel guides -- includes trip planner, travel collector, and flight intelligence.",
       "source": "./",
       "strict": true,
       "skills": [
         "./skills/trip-planner",
         "./skills/travel-collector",
-        "./skills/flight-intelligence",
-        "./skills/trip-html-generator",
-        "./skills/ui-style",
-        "./skills/trip-deployer"
+        "./skills/flight-intelligence"
       ],
       "agents": ["./agents/trip-planner-agent.md"]
     }

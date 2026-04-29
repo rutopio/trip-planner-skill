@@ -1,33 +1,10 @@
-# Phase 4.5 — Final Audit (UI style is deferred to post-generation)
+# Phase 4.5 — Final Audit
 
-Phase 4.5 used to ask the user to pick a UI style here. **It no longer does.** Asking for a style before the user can see what the trip looks like is decision fatigue — the user has just spent ~15 minutes on logistics, attractions, routes, and deep research; another design question right before generation slows everything down without helping them choose well.
-
-**New flow: ship Swiss Minimalist by default, offer restyle after they see it.**
+Final quality gate before HTML generation. Two checks: route efficiency and crowd/party-size validation. **No style discussion** — visual style is fixed (shadcn / Vercel / Next.js aesthetic), there is no picker and no restyle offer.
 
 ---
 
-## A. UI Style — Use the Default, Skip the Question
-
-**Do NOT invoke the `ui-style` skill at this phase. Do NOT ask the user about styles.** Phase 5 generates with the Swiss Minimalist design tokens already baked into [trip-html-generator/references/layout-blueprint.md §Design Tokens](../../trip-html-generator/references/layout-blueprint.md).
-
-Swiss Minimalist (the default):
-- Clean grid, generous whitespace
-- Red accent (`#DC2626`)
-- **Zero rounded corners** (`--r: 0px`)
-- Notion/Linear aesthetic
-- Pairs well with calendar/itinerary information density
-
-After Phase 5 completes successfully and the user has reviewed the live HTML (running `python3 serve.py`), THEN offer a restyle:
-
-> "The trip is generated and live at `http://localhost:8765`. The current style is **Swiss Minimalist** (the default — clean grid, red accents, no rounded corners). Want to keep this style, or try a different one? I can apply Luxury Editorial, Botanical, Newsprint, Professional Serif, Academia, Organic, or Monochrome — all designed to work with travel itineraries."
-
-If the user picks a different style, it's a Phase-5-step-D rerun (style.css only) — not a full regeneration. Hand off to `ui-style` skill at that point. Trip data stays intact.
-
-**Override rule:** if the user volunteers a preference earlier in the conversation ("I want it to look like a magazine", "make it dark", "Newsprint please"), respect it — apply that style at Phase 5 generation instead of the Swiss default. But do NOT proactively ask.
-
----
-
-## B. Route Efficiency Audit (MANDATORY)
+## A. Route Efficiency Audit (MANDATORY)
 
 Comprehensive audit using POI coordinates. **Mandatory quality gate** — generated itinerary must be geographically optimized.
 
@@ -60,7 +37,7 @@ Post-opt avg daily: Y km (save Z%)
 
 ---
 
-## C. Crowd & Party-Size Final Validation
+## B. Crowd & Party-Size Final Validation
 
 After geographic audit, also validate:
 

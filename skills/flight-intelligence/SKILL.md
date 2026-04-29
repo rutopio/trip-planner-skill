@@ -108,77 +108,25 @@ If the user has fixed dates, research current and predicted flight prices:
 >          Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec
 > ```
 
-This data feeds into the **Booking Tab** as a "Flight Price Intelligence" section in the HTML generator.
+This data feeds into the **Booking section** of the final single-file HTML.
 
 ---
 
-## Output Schema (when invoked from `trip-planner` Phase 1.5)
+## Output (when invoked from `trip-planner` Phase 1.5)
 
-When this skill is invoked as part of the trip-planning flow (not as a stand-alone Q&A), it MUST return a structured object that gets written to `trip.json.flightIntel`. The HTML generator's Booking tab reads this verbatim.
+Return a plain summary that the trip-planner can render directly into the Booking section of `index.html` during Phase 5. No JSON schema, no separate file write — the data lives in conversation context until Phase 5 writes it as plain HTML markup (cards, tables) in the user's language.
 
-```jsonc
-"flightIntel": {
-  "route": "TPE→PUS",                         // origin→destination IATA
-  "researched_at": "2026-04-29T10:00:00+08:00",
-  "fixed_dates": true,                        // false = sub-flow A (date recommendation)
+Include:
 
-  // Sub-flow A output (only when fixed_dates=false)
-  "date_recommendations": [
-    {
-      "period": "2026-03-15 to 2026-03-22",
-      "season": "shoulder",
-      "price_range": { "low": 9000, "high": 12000, "currency": "TWD" },
-      "weather": "early spring, mild",
-      "holiday_pairing": "Take 2 days off → 9-day trip with Tomb Sweeping",
-      "verdict": "best",                      // best | good | avoid
-      "rationale": "Cheapest flights + long weekend bridge"
-    }
-  ],
-
-  // Sub-flow B output (only when fixed_dates=true)
-  "current_price": {
-    "amount": 9800,
-    "currency": "TWD",
-    "airline": "Tigerair",
-    "source_url": "https://...",
-    "captured_at": "2026-04-29T10:00:00+08:00"
-  },
-  "historical": {
-    "same_period_last_year": { "low": 8500, "high": 11200, "currency": "TWD" },
-    "vs_historical_avg_pct": -8,              // negative = below avg = cheaper
-    "data_points": 12                         // months of history examined
-  },
-  "verdict": {
-    "recommendation": "buy-now",              // buy-now | wait | watch
-    "confidence": "high",                     // high | medium | low
-    "reasoning": "Currently 8% below 12-month avg; LCCs typically increase 4 weeks before departure",
-    "wait_until": null                        // ISO date if recommendation = "wait"
-  },
-  "alternatives": [
-    {
-      "airline": "China Airlines",
-      "price": 11500,
-      "tradeoff": "+NT$1,700, full-service with checked bag included"
-    }
-  ],
-  "checkin_window": "48hr–1hr before departure",
-  "checkin_url": "https://booking.tigerairtw.com/Web-Checkin"
-}
-```
-
-**Required fields per sub-flow:**
-- Sub-flow A (flexible dates): `route`, `researched_at`, `fixed_dates: false`, `date_recommendations[]` (≥3 entries).
-- Sub-flow B (fixed dates): `route`, `researched_at`, `fixed_dates: true`, `current_price`, `historical`, `verdict`.
+- **Route** (origin → destination IATA)
+- **Sub-flow A — flexible dates:** ≥3 candidate periods with price range, season, weather, holiday pairing, verdict (best/good/avoid), one-line rationale.
+- **Sub-flow B — fixed dates:** current price + airline + source URL, historical comparison (same period last year, % vs 12-month avg), recommendation (buy-now / wait / watch) with reasoning, 1–2 airline alternatives with trade-offs, check-in window + URL.
 
 **Caller integration (trip-planner Phase 1.5):**
-```
 1. Run flight-intelligence with logistics from Phase 1.
-2. Receive the flightIntel object above.
-3. Write it to trip.json: trip.flightIntel = result
-4. Update _progress.completed_phase = 1.5
-5. Continue to Phase 2.
-```
+2. Receive the summary above and present it to the user.
+3. Carry it forward in conversation context.
+4. Continue to Phase 2.
+5. Phase 5 renders this content directly into the HTML's Booking section.
 
-**The HTML generator (Booking tab Flight Card)** reads `trip.flightIntel.verdict` and renders the green/yellow/red verdict badge inline. It reads `current_price`, `historical`, `alternatives` for the comparison section.
-
-**Skip Phase 1.5 entirely if `logistics.flights.status === "booked"`** — flights already purchased; intelligence is moot. Surface the booked flight in `booking.purchased[]` instead.
+**Skip Phase 1.5 entirely if flights are already booked** — surface the booked flight in the Booking section instead.

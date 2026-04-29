@@ -1,7 +1,7 @@
 {
   "name": "trip-planner-skill",
   "version": "0.3.0",
-  "description": "Interactive travel planning toolkit — research, plan, generate HTML travel guides, and deploy.",
+  "description": "Interactive travel planning toolkit — research, plan, and generate self-contained HTML travel guides.",
   "author": {
     "name": "Harmony"
   }

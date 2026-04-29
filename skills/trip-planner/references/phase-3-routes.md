@@ -26,7 +26,7 @@ About **geographic efficiency** — clustering nearby attractions and finding th
    - Per day: high/low, condition (sunny/cloudy/rainy), sunrise/sunset
    - Identify rainy days → indoor activities; clear days → outdoor/sunset/nature
    - Note seasonal events: cherry blossom timing, festivals, typhoon season
-   - This data populates the `weather` field in trip.json AND informs route optimization
+   - This data is rendered into the Overview/Schedule sections of the final HTML and informs route optimization
 
 ---
 
@@ -66,7 +66,7 @@ About **geographic efficiency** — clustering nearby attractions and finding th
   - Sunset/sunrise → clearest forecast
   - Rain expected: indoor alternatives + "Rain expected — indoor prioritized"
   - Must-visit outdoor on rainy day: "Rain Day 3 — swap Gwangalli (Day 3) with ARTE Museum (Day 4)"
-  - Store in trip.json `weather` array
+  - Carry weather array forward in conversation context for Phase 5 to render
   - On later changes, **always check weather** before suggesting day swaps
 - **Time conflict detection**: same time-of-day clashes → FLAG ("Cheongsapo Sunset Bridge and Gwangalli Night View both dusk — split")
 - **Meal suggestions** near each cluster with specific restaurant names
@@ -196,20 +196,15 @@ Ask:
 > "Which attraction are you most looking forward to? Send a photo and I'll put it on the cover."
 > "Got a one-liner for this trip? (Or want me to write one?)"
 
-- Photo provided → store as base64 in localStorage via upload button on Today overlay
-- Tagline provided → store as `tagline` in trip.json (4-language translations)
-- "You write one" → poetic one-liner capturing the trip's essence, translate to all 4 languages
+- Photo provided → embed as base64 `<img>` inline in the HTML cover section during Phase 5
+- Tagline provided → carry forward in conversation context; Phase 5 renders it in the Cover/Today section in the user's language only
+- "You write one" → poetic one-liner capturing the trip's essence, in the user's conversation language
 
-The tagline appears on the Today overlay below the destination name.
+The tagline appears on the Cover / Today section below the destination name. **Single language only — written in the user's conversation language.** Example for an English-speaking user planning Japan:
 
-```json
-"tagline": {
-  "zh": "從海邊城市走進火山秘境，櫻花盛開",
-  "en": "From coastal city to volcanic wonders, under cherry blossoms",
-  "ko": "해변 도시에서 화산 비경으로",
-  "ja": "海辺の街から火山の秘境へ"
-}
-```
+> "From coastal city to volcanic wonders, under cherry blossoms"
+
+For a Traditional Chinese speaker, write the tagline in Traditional Chinese only. No translations, no JSON object.
 
 ---
 
@@ -226,7 +221,7 @@ For every destination country, research and compile ALL entry requirements.
 6. Health declarations
 7. Customs declarations
 
-**Store as `entryRequirements` in trip.json** (see [trip-json-schema.md](../../trip-html-generator/references/trip-json-schema.md)).
+**Carry these requirements forward in conversation context.** Phase 5 renders them into the Today overlay and Checklist section of the HTML.
 
 **Display on Today overlay:**
 - Pending items appear ABOVE the todo list
@@ -249,7 +244,7 @@ For every destination country, research and compile ALL entry requirements.
 
 ## Step 3j: Entry Form Pre-fill Data (MANDATORY)
 
-For each form in 3i, compile ALL fields user needs from already-collected data (flights, hotels, dates). Store as `entryForms` in trip.json.
+For each form in 3i, compile ALL fields user needs from already-collected data (flights, hotels, dates). Carry forward in conversation context for Phase 5 to render into the Checklist section.
 
 **Display in checklist tab as collapsible `<details>`:**
 - Each form = collapsible card, form name as summary

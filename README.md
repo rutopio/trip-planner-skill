@@ -1,38 +1,41 @@
 # Trip Planner Plugin
 
-Interactive travel planning toolkit for Claude. Research destinations, plan itineraries, generate HTML travel guides, and deploy as live websites.
+Interactive travel planning toolkit for Claude. Drop research material, plan an itinerary, and generate a single-file HTML travel guide. Open it in your browser yourself — no server, no deploy.
 
 ## Skills
 
 | Skill | Description |
 |-------|-------------|
-| **trip-planner** | Main orchestrator -- conversational trip planning from research to confirmation (Phases 0-4.5) |
-| **travel-collector** | Extract and organize travel research from URLs, screenshots, text notes into structured JSON |
+| **travel-collector** | Parses dropped URLs, screenshots, blog posts, social links, or notes into a structured summary that lives in conversation context |
 | **flight-intelligence** | Flight price research, seasonality analysis, buy-now-or-wait recommendations |
-| **trip-html-generator** | Generate interactive HTML travel guide with maps, calendar, budget tracker, and more |
-| **ui-style** | 30 design styles (cyberpunk, swiss minimalist, neo-brutalism, etc.) for the HTML output |
-| **trip-deployer** | Deploy the generated HTML to GitHub Pages, Netlify, Vercel, or Cloudflare Pages |
+| **trip-planner** | Main orchestrator — conversational trip planning from gathering to HTML generation (Phases 1–5) |
 
 ## Workflow
 
 ```
-travel-collector          (collect research from links/screenshots)
-       |
-       v
-trip-planner              (orchestrate planning: gather -> recommend -> route -> research)
-  |         |
-  |         v
-  |    flight-intelligence (flight price analysis if not booked)
-  |
-  v
-ui-style                  (pick a visual style)
-  |
-  v
-trip-html-generator       (generate the interactive HTML travel guide)
-  |
-  v
-trip-deployer             (publish as a live website)
+(Optional) travel-collector  ── parse links / screenshots / notes
+                                       │
+                                       ▼
+trip-planner
+  Phase 1   gather logistics & preferences (seeded from collector summary if any)
+  Phase 1.5 ─→ flight-intelligence (if not booked)
+  Phase 2   recommend attractions
+  Phase 3   day-by-day routes
+  Phase 4   deep research (prices, hours, links)
+  Phase 4.5 final confirmation gate
+  Phase 5   write single-file index.html and stop
 ```
+
+## Output
+
+A single self-contained `index.html` per trip:
+
+- All trip content written as plain HTML markup in the user's language
+- Tailwind CSS via CDN, Inter via Google Fonts CDN — **only two external dependencies**
+- ≤ 30 lines of JS total (tab switcher + optional currency toggle)
+- Visual style fixed: modern shadcn / Vercel / Next.js aesthetic
+- Monolingual: written in the user's conversation language, no i18n
+- The agent stops after writing the file; the user opens `index.html` themselves
 
 ## Install
 
