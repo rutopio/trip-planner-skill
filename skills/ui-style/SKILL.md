@@ -108,6 +108,7 @@ If the user hasn't picked a specific style, help them choose based on:
 
 | Project Type | Recommended Styles |
 |---|---|
+| **Travel guide / Itinerary planner** | **Swiss Minimalist, Luxury Editorial, Botanical, Newsprint, Professional Serif, Academia, Organic, Monochrome** |
 | SaaS / Dashboard | SaaS, Enterprise, Modern Dark, Minimal Dark, Professional |
 | Portfolio / Creative | Bold Typography, Kinetic, Monochrome, Swiss Minimalist |
 | E-commerce / Luxury | Luxury Editorial, Art Deco, Professional Serif |
@@ -118,6 +119,29 @@ If the user hasn't picked a specific style, help them choose based on:
 | Nature / Wellness | Botanical, Organic, Neumorphism |
 | Education / Academic | Academia, Swiss Minimalist, Newsprint |
 | Trendy / Experimental | Claymorphism, Neo-Brutalism, Vaporwave, Maximalism |
+
+### Travel-suitable styles — why these (and not the others)
+
+A trip planner needs styles that prioritize **information density, readability, and longevity**. Avoid styles that fight the dense data UI (calendar grids, POI lists, maps, budget tables):
+
+| ✅ Travel-suitable | Why it works |
+|--------------------|---------------|
+| Swiss Minimalist | Grid-friendly, neutral, high info density |
+| Luxury Editorial | Magazine-grade typography for long-form trip narratives |
+| Botanical / Organic | Warm earth tones — feels like a travel journal |
+| Newsprint | Multi-column layouts shine for itineraries |
+| Professional Serif | Reads beautifully on long pages |
+| Academia | Encyclopedia-of-the-trip aesthetic |
+| Monochrome | Disappears, lets the content shine |
+
+| ❌ Avoid for travel | Why |
+|---------------------|------|
+| Cyberpunk, Vaporwave, Web3, Terminal | Dark/neon aesthetics fight against map and calendar density |
+| Neo-Brutalism, Maximalism | Visual noise at the cost of itinerary clarity |
+| Kinetic, Bold Typography | Designed for posters, not 14-day plans |
+| Industrial, Claymorphism | Skeuomorphic chrome distracts from content |
+
+When the `trip-planner` skill picks a style at Phase 4.5, it filters this travel-suitable subset and asks the user to choose. See [trip-planner/references/phase-4_5-style-and-audit.md](../../trip-planner/references/phase-4_5-style-and-audit.md).
 
 ## Important Notes
 

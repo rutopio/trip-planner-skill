@@ -270,6 +270,34 @@ function checkNoFlatI18nKeys(trip, r) {
   walk2(trip, '$');
 }
 
+function checkCDNTags(root, r) {
+  // Phase 5 mandates three CDN dependencies in index.html. If any is missing,
+  // the page silently breaks (no Tailwind = unstyled; no Leaflet JS = no map;
+  // no Google Fonts = wrong typography). This check catches all three early.
+  const indexPath = join(root, 'index.html');
+  if (!existsSync(indexPath)) return;
+  const html = readFileSync(indexPath, 'utf8');
+  const requiredCDNs = [
+    { rule: 'cdn-tailwind',   pattern: /cdn\.tailwindcss\.com/,                  hint: 'Tailwind CDN <script src="https://cdn.tailwindcss.com"> must be in <head>' },
+    { rule: 'cdn-leaflet-js', pattern: /unpkg\.com\/leaflet@[\d.]+\/dist\/leaflet\.js/, hint: 'Leaflet JS <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"> must be in <head>' },
+    { rule: 'cdn-leaflet-css', pattern: /unpkg\.com\/leaflet@[\d.]+\/dist\/leaflet\.css/, hint: 'Leaflet CSS <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"> must be in <head>' },
+    { rule: 'cdn-google-fonts', pattern: /fonts\.googleapis\.com\/css2\?family=/, hint: 'Google Fonts <link> with Noto Sans + Material Symbols must be in <head>' },
+    { rule: 'cdn-noto-sans-tc', pattern: /Noto\+Sans\+TC/,                       hint: 'Google Fonts URL must include Noto+Sans+TC for CJK rendering' },
+    { rule: 'cdn-material-symbols', pattern: /Material\+Symbols\+Outlined/,      hint: 'Google Fonts URL must include Material+Symbols+Outlined for icons' },
+  ];
+  for (const { rule, pattern, hint } of requiredCDNs) {
+    if (!pattern.test(html)) r.err(rule, hint);
+  }
+  // Forbid raw OSM tile usage in app.js (returns 403 in browsers — must use CartoDB).
+  const jsPath = join(root, 'app.js');
+  if (existsSync(jsPath)) {
+    const js = readFileSync(jsPath, 'utf8');
+    if (/tile\.openstreetmap\.org/.test(js)) {
+      r.err('osm-direct', `app.js uses tile.openstreetmap.org directly — this returns 403 in browsers. Use CartoDB Voyager: https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png`);
+    }
+  }
+}
+
 function checkMapPlacement(root, r) {
   const indexPath = join(root, 'index.html');
   if (!existsSync(indexPath)) return;
@@ -394,6 +422,7 @@ if (trip) {
     checkNoRawObjectInterpolation(root, r);
     checkMapPlacement(root, r);
     checkRequiredMountPoints(root, r);
+    checkCDNTags(root, r);
   }
 }
 

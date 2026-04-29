@@ -1,5 +1,7 @@
 # Phase 0 + 0.5 — Load & Review Existing Research
 
+> **Schema contract:** the structure of `travel-research.json` and how each field maps into `trip.json` is defined in [travel-collector/references/output-schema.md](../../travel-collector/references/output-schema.md). Read that doc first if you need field-level behavior.
+
 ## Phase 0: Auto-Load `travel-research.json` (No User Interaction)
 
 Before any conversation, check if `travel-research.json` exists in the working directory. This file is produced by the `travel-collector` skill.

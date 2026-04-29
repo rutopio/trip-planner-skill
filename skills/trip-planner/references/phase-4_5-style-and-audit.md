@@ -9,23 +9,27 @@ Two parallel sub-phases before Phase 5 (HTML generation):
 
 ## A. UI Style Selection
 
-Invoke the `ui-style` skill. The 30 design references live in that skill's `references/` directory.
+Invoke the `ui-style` skill. **Use the travel-suitable subset** defined in [ui-style/SKILL.md §Recommending a Style → Travel-suitable styles](../../ui-style/SKILL.md). Do NOT show all 30 styles — most clash with itinerary density.
 
-**Present with `AskUserQuestion`** — recommend 4–5 styles fitting a travel guide + "Other" for full catalog:
+**Present with `AskUserQuestion`** — pick 4 from the travel-suitable list, plus "Other" for full catalog:
 
 ```
 question: "What style do you want for the HTML?"
 options:
-  - label: "Swiss Minimalist (current default)"
-    description: "Clean grid, red accents, zero rounded corners, Notion/Linear aesthetic"
+  - label: "Swiss Minimalist (default)"
+    description: "Clean grid, red accents, zero rounded corners — Notion/Linear aesthetic"
   - label: "Luxury Editorial"
     description: "High-end magazine feel, gold accents, serif fonts, grayscale photos"
   - label: "Botanical / Organic"
     description: "Nature-inspired, sage green + terracotta, rounded shapes, paper texture"
   - label: "Newsprint"
     description: "Newspaper layout, multi-column, drop caps, vintage print feel"
+  - label: "Other (show full travel-suitable list)"
+    description: "Pick from the 8 travel-friendly styles"
 multiSelect: false
 ```
+
+**If user picks "Other":** show the remaining 4 travel-suitable styles (Professional Serif, Academia, Organic, Monochrome) and let them pick. Only fall back to the full 30-style catalog if the user explicitly asks ("show me everything", "I want cyberpunk for fun"). Then warn that non-travel styles may compromise readability.
 
 **After selection:**
 1. Read the corresponding reference from `ui-style` skill's `references/`

@@ -197,6 +197,51 @@ Scams, areas to avoid, emergency numbers.
 - **Booking links must be real product URLs** — `site:klook.com {name}`, `site:kkday.com {name}` for actual product pages, not homepages
 - Every paid attraction: compare ≥3 sources (official + 2 platforms)
 
+---
+
+## Research Budget (MANDATORY — prevents Phase 4 from running forever)
+
+Phase 4 is the most expensive phase (most web searches, most token spend). Without limits the LLM will keep refining and cross-checking until the user gets bored. Apply this budget:
+
+### Per-POI ceiling
+
+For each POI, do at most **3 web searches** total. Spend them in this priority order:
+
+1. **One** combined search for `{name} {city} price hours address` (gets 70% of fields).
+2. **One** search for `{name} klook OR kkday` (booking comparison).
+3. **One** search for `{name} crowd peak hours` or `{name} reservation needed` (situational).
+
+If after 3 searches a field is still unknown, write `"check on arrival"` (with warning icon in the UI) and **move on**. Don't burn a 4th search.
+
+### Per-field stop rules
+
+| Field | Stop when… |
+|-------|-----------|
+| Price | You have a number from any official OR Klook/KKday source. Don't keep cross-checking 5 platforms. |
+| Hours | You have weekday + weekend. Holiday-specific hours = nice-to-have, not required. |
+| Address | Neighborhood-level is enough; full street is ideal but not required. |
+| Crowd | One mention of "peak X–Y, quieter at Z" is enough. Don't aggregate 4 blogs. |
+| Booking platforms | Compare official + Klook + KKday = 3 platforms total. **Don't add Viator/GetYourGuide unless one of those three is missing.** |
+
+### Per-trip total ceiling
+
+- **Web searches across all of Phase 4: cap at ~`POI count × 3 + 25`.** A 20-POI trip = ~85 searches max.
+- After 75% of budget is spent, **stop researching new POIs** and finalize what's already researched.
+
+### What NOT to research (skip immediately)
+
+- ❌ POIs the user said "skip" or "maybe" — only research `must-visit` and `recommended` selections.
+- ❌ Items already fully populated by `travel-research.json` (Phase 0 data). Re-checking is waste.
+- ❌ Generic destination overviews ("things to do in Tokyo") — this is Phase 2 work, not Phase 4.
+- ❌ Hotel research if `logistics.accommodation` is already booked.
+- ❌ Flight research if `logistics.flights` is already booked.
+
+### "Good enough" signal
+
+When **80% of POIs have price + hours + address + 1 booking source**, declare Phase 4 complete and move to 4.5. The remaining 20% can carry `"check on arrival"` markers without breaking the trip.
+
+This is a hard rule, not a guideline. **If you find yourself on the 4th search for a single POI, stop and tag the field as `check on arrival`.**
+
 ## Tutorial & Guide Language Rules
 
 For tutorial links, how-to guides, step-by-step (transit card, airport→city, payment app):

@@ -21,6 +21,8 @@ useful travel information into a clean, structured format that can later feed in
 Think of yourself as a smart travel scrapbook: the user browses, finds interesting things, and
 tosses them your way. You catch everything, organize it, and keep it ready.
 
+> **Output contract:** the schema this skill emits is defined in [references/output-schema.md](references/output-schema.md). It is the canonical contract between this skill (producer) and `trip-planner` (consumer). When adding/changing fields, update that file too.
+
 ## How It Works
 
 1. **Receive** — the user gives you input (URL, screenshot, text, etc.)

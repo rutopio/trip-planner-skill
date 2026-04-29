@@ -74,15 +74,7 @@ Hand off to the `trip-deployer` skill. It guides the user through publishing the
 
 ## Updating an Existing Plan
 
-If the user wants to modify an existing trip plan:
-1. Read the existing `data/trip.json`
-2. **Check weather for affected days** — read the `weather` array and provide weather-aware advice:
-   - "Day 5 is sunny — great for moving the outdoor market here"
-   - "Day 3 has rain — keep the museum on this day"
-   - Swapping days: compare both days' weather, recommend the better arrangement
-   - New outdoor attraction: place on the clearest-weather day available
-3. Apply changes (add/remove attractions, change dates, adjust budget) by editing `trip.json` only
-4. The HTML/CSS/JS do not need to change — they re-render from the updated JSON
+**Do not handle this in trip-planner.** Hand off to the `trip-mutator` skill, which surgically edits `data/trip.json` without re-running phases 0–5. The HTML/CSS/JS template never changes — only the JSON.
 
 ---
 
