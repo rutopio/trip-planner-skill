@@ -36,7 +36,7 @@ Vacation habits unlock long-weekend optimization and trip-depth logic.
 
 ## Round 1: Basics + What's Already Locked In
 
-Use `AskUserQuestion` and group logically.
+Use `AskUserQuestion` and group logically. Schema limits apply (max 4 options per question, header ≤ 12 chars) — see [ask-user-question-rules.md](ask-user-question-rules.md).
 
 | Field | Ask | Why |
 |-------|-----|-----|
@@ -77,7 +77,7 @@ Invoke the `flight-intelligence` skill. Pass origin, destination, fixed/flexible
 
 **Do NOT accept vague answers like "moderate" or "mid-range" without drilling down.**
 
-Use `AskUserQuestion` with **concrete numbers specific to the destination**. Research real prices via `WebSearch` first if needed.
+**Render the budget table as markdown and ask the user to reply in free text** (e.g. "Comfort overall, but Premium on food"). Do NOT use `AskUserQuestion` here — the 7 line items × 3 tiers cannot fit the 4-option schema limit. Research real prices via `WebSearch` first if needed — **search in the destination's local language** for accurate current prices ([search-language-rules.md](search-language-rules.md)).
 
 > **Budget Confirmation ({destination}, {days} days, {N} people):**
 >
@@ -106,7 +106,7 @@ Let user mix-and-match ("save on accommodation but eat well"). Record choices.
 
 | Field | Ask |
 |-------|-----|
-| Interests | `multiSelect`: Cultural / Nature / Food / Shopping / Nightlife / Art / Family / Outdoor / Photography / Local experiences / Cafe hopping / Markets |
+| Interests | **Split into 3 `AskUserQuestion` rounds, 4 options each, `multiSelect: true`**. Before each round, say "pick from this set, more on the next page". Round A: Cultural / Nature / Food / Shopping. Round B: Nightlife / Art / Family / Outdoor. Round C: Photography / Local experiences / Cafe hopping / Markets. **Never put all 12 in one call — exceeds the 4-option schema limit and fails.** |
 | Pace | Packed (4–5/day) / Balanced (3–4/day) / Slow (2–3/day) |
 | Companions | solo / couple / family (kid ages?) / group (count?) |
 | Mobility | "20,000 steps/day OK? Or need more rides?" |

@@ -62,7 +62,7 @@ This is non-negotiable. Do not skip this step. Do not guess the folder from chat
 
 - **0 results** → No trip plan exists. Stop the mutation flow. Tell the user: "I don't see an existing trip data folder (`data/trip.meta.json` or legacy `data/trip.json`) in this directory. Did you mean to start a new plan? (I can hand off to `trip-planner`.)" Do NOT fabricate a folder.
 - **1 result** → Use that folder. Echo the absolute path back to the user in one line: "Editing `<abs-path>`."
-- **2+ results** → Invoke `AskUserQuestion` with the folder list. Do NOT guess based on the trip name in the user's message — they may have ambiguous names (`tokyo-2026/` and `tokyo-2027/`). Always ask.
+- **2+ results** → Ask the user which folder. **If 2–4 results**, use `AskUserQuestion` (one option per folder). **If 5+ results**, render a numbered markdown list and ask the user to reply with the number — `AskUserQuestion` caps at 4 options per question and will fail otherwise. See [../trip-planner/references/ask-user-question-rules.md](../trip-planner/references/ask-user-question-rules.md). Do NOT guess based on the trip name in the user's message — they may have ambiguous names (`tokyo-2026/` and `tokyo-2027/`). Always ask.
 
 If `find` itself fails (permission errors, weird shell), tell the user explicitly rather than proceeding blind.
 

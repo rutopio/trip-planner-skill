@@ -14,7 +14,7 @@ Deploy a generated trip plan as a live website the user can share with travel co
 Proactively offer to help after HTML generation:
 "Your trip plan is ready! Want me to help you publish it as a live website you can share?"
 
-Present these options (from easiest to most flexible) using `AskUserQuestion`:
+Present these options (from easiest to most flexible) using `AskUserQuestion`. The four options below fit within the 4-option limit; if a 5th provider is ever added, switch to a markdown list + free-text reply instead. See [../trip-planner/references/ask-user-question-rules.md](../trip-planner/references/ask-user-question-rules.md).
 
 ## Option A: GitHub Pages (Recommended -- Free, No Account Setup if they have GitHub)
 

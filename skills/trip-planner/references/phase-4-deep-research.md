@@ -2,6 +2,8 @@
 
 Gather **real, current** data for everything the user selected. The HTML must contain accurate, actionable info, not generic advice.
 
+**Search in the destination's local language first** for hours, prices, and official-site verification — English-only queries miss the most accurate sources. See [search-language-rules.md](search-language-rules.md).
+
 ---
 
 ## Research Checklist
@@ -193,6 +195,7 @@ Scams, areas to avoid, emergency numbers.
 - Always include **addresses** or at minimum neighborhood
 - Always include **opening hours** when available
 - Prefer official sources + recent blogs (last 2 years)
+- **Verify hours and prices on the official local-language page** — third-party English summaries lag and are often wrong. See [search-language-rules.md](search-language-rules.md).
 - Outdated/uncertain → note in HTML with warning icon
 - **Booking links must be real product URLs** — `site:klook.com {name}`, `site:kkday.com {name}` for actual product pages, not homepages
 - Every paid attraction: compare ≥3 sources (official + 2 platforms)

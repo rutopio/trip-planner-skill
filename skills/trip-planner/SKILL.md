@@ -78,10 +78,17 @@ Hand off to the `trip-deployer` skill. It guides the user through publishing the
 
 ---
 
+## AskUserQuestion Hard Rules
+
+Every `AskUserQuestion` call must follow [ask-user-question-rules.md](references/ask-user-question-rules.md) — schema limits (max 4 options per question, header ≤ 12 chars, no manual "Other"), pagination strategy for >4 choices, and when to fall back to markdown + free text. Violations fail with `Invalid tool parameters`.
+
+---
+
 ## Important Guidelines
 
 - **Accuracy over completeness** — 15 well-researched attractions beat 30 with vague info. Every attraction needs name, address, price, hours, one-line "why".
 - **Prices must be real** — search actual current prices. Don't guess. Can't find one → "check on arrival" with warning icon.
+- **Search in the destination's local language first** — Japanese for Japan, Korean for Korea, Thai for Thailand, etc. Local-language queries reach official sites and current prices that English-only queries miss. See [references/search-language-rules.md](references/search-language-rules.md).
 - **Links must be real** — only verified URLs. No made-up URLs.
 - **`trip.json` is the single source of truth** — never hardcode trip-specific data into HTML or JS. The Phase 5 generator enforces this contract.
 - **localStorage for cover photo** — use `trip-cover-photo` key for user's uploaded base64 image.

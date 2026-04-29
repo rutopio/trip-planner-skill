@@ -119,7 +119,8 @@ For every work day, you MUST recommend a specific workspace and validate hours.
 
 ## Step 3e: Get User Feedback
 
-`AskUserQuestion`:
+These are open-ended tweak questions, not multiple-choice — **ask in free text**, not via `AskUserQuestion` (which forces 2–4 fixed options per question). See [ask-user-question-rules.md](ask-user-question-rules.md).
+
 - "Daily arrangement OK? Any tweaks?"
 - "Make any day more relaxed? Move attractions across days?"
 - "Adopt the transit pass recs?"

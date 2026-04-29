@@ -63,7 +63,7 @@ If not already answered in digital nomad mode, ask:
 >
 > **If you can work remotely:** {alternative recommendation}
 
-Use `AskUserQuestion` to let the user pick a time window, then proceed to lock dates.
+Use `AskUserQuestion` to let the user pick a time window (cap at 4 windows; if more candidates exist, render the table above and ask in free text). See [../trip-planner/references/ask-user-question-rules.md](../trip-planner/references/ask-user-question-rules.md). Then proceed to lock dates.
 
 ## Sub-flow B: Dates are fixed but flights not yet booked
 

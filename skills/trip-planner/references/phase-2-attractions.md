@@ -8,7 +8,7 @@ The most important conversational phase. Don't dump a list — curate, group by 
 
 ## Step 2a: Deep Research from Multiple Sources
 
-Use `WebSearch` AND `WebFetch` aggressively. Search in BOTH English and the destination's local language. **At least 8–10 searches** to build a comprehensive picture.
+Use `WebSearch` AND `WebFetch` aggressively. **Search in the destination's local language FIRST** (Japanese for Japan, Korean for Korea, Thai for Thailand, etc.) — that's how you reach official sites and current prices. Cross-check with English second, user's language third. See [search-language-rules.md](search-language-rules.md). **At least 8–10 searches** to build a comprehensive picture.
 
 ### Source 1: Travel Platforms
 Hit ALL five — different inventory and pricing:
@@ -68,7 +68,7 @@ When user asks "Do you have more info?" or seems uncertain:
 
 ## Step 2b: Present Attraction Recommendations (Multiple Rounds)
 
-Present using **multiple separate `AskUserQuestion` calls**, one per area/category. `multiSelect: true`, **3–4 options max** per call (not more — decision fatigue).
+Present using **multiple separate `AskUserQuestion` calls**, one per area/category. `multiSelect: true`, **3–4 options max** per call (not more — decision fatigue, and 4 is the schema hard limit). `header` ≤ 12 chars. See [ask-user-question-rules.md](ask-user-question-rules.md).
 
 ### Round 1–N: Major Areas (one AskUserQuestion per area)
 
@@ -130,11 +130,18 @@ After ALL area rounds, summarize:
 Ask: "Anything to add?" and "Anything to remove?"
 
 ### Step 2: Priority — must-go vs if-time-permits
-`AskUserQuestion` with `multiSelect: true` listing ALL confirmed attractions. User checks the must-go ones. Unchecked → if time permits.
+
+Mark must-go attractions. Unchecked → if time permits.
+
+- **If ≤ 4 confirmed attractions:** one `AskUserQuestion`, `multiSelect: true`.
+- **If 5–16 confirmed attractions:** paginate into rounds of ≤ 4 (group by area for coherence). Tell the user "must-go selection — page 1 of N" before each call.
+- **If > 16 attractions:** render the full list as a numbered markdown checklist and ask the user to reply with the numbers of the must-gos in free text. `AskUserQuestion` is the wrong tool at that scale.
+
+See [ask-user-question-rules.md](ask-user-question-rules.md) for the schema limits.
 
 ```
-question: "Which are must-go? (Unchecked become 'if time permits' alternatives)"
-options: [each confirmed attraction]
+question: "Which of these are must-go? (Unchecked become 'if time permits' alternatives)"
+options: [up to 4 confirmed attractions]
 multiSelect: true
 ```
 
