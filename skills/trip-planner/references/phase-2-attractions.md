@@ -135,7 +135,7 @@ Mark must-go attractions. Unchecked → if time permits.
 
 - **If ≤ 4 confirmed attractions:** one `AskUserQuestion`, `multiSelect: true`.
 - **If 5–16 confirmed attractions:** paginate into rounds of ≤ 4 (group by area for coherence). Tell the user "must-go selection — page 1 of N" before each call.
-- **If > 16 attractions:** render the full list as a numbered markdown checklist and ask the user to reply with the numbers of the must-gos in free text. `AskUserQuestion` is the wrong tool at that scale.
+- **If > 16 attractions:** continue paginating in rounds of 4, grouped by area. There is no upper bound — keep going until all attractions are covered. Do NOT fall back to free text.
 
 See [ask-user-question-rules.md](ask-user-question-rules.md) for the schema limits.
 

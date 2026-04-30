@@ -119,13 +119,36 @@ For every work day, you MUST recommend a specific workspace and validate hours.
 
 ## Step 3e: Get User Feedback
 
-These are open-ended tweak questions, not multiple-choice — **ask in free text**, not via `AskUserQuestion` (which forces 2–4 fixed options per question). See [ask-user-question-rules.md](ask-user-question-rules.md).
+Use `AskUserQuestion` for every structured choice. Only resort to free text for the Phase confirmation gate at the very end.
 
-- "Daily arrangement OK? Any tweaks?"
-- "Make any day more relaxed? Move attractions across days?"
-- "Adopt the transit pass recs?"
+**Ask these via separate `AskUserQuestion` calls (header and question in user's language):**
 
-**Iterate until happy.** 2–3 rounds is fine.
+1. Overall pace satisfaction:
+```
+header: "Daily Pace" (≤ 12 chars)
+question: "How does the overall itinerary pace feel?"
+multiSelect: false
+options:
+  - label: "Looks good"      description: "No changes needed, proceed"
+  - label: "A day too packed" description: "I'll tell you which day"
+  - label: "A day too loose"  description: "I'll tell you which day"
+  - label: "Needs rework"     description: "Rearrange some attraction order"
+```
+
+2. Transit pass adoption (only if passes were recommended):
+```
+header: "Transit Pass" (≤ 12 chars)
+question: "Adopt the recommended transit passes?"
+multiSelect: false
+options:
+  - label: "All of them"   description: "Buy all recommended passes"
+  - label: "Some of them"  description: "I'll specify which ones"
+  - label: "None"          description: "Pay per ride instead"
+```
+
+If the user selects "a day too packed / too loose / needs rework", follow up with a `AskUserQuestion` listing the trip days as options (`multiSelect` allowed) so they can pinpoint which days. Apply changes, then loop back.
+
+**Iterate until the user selects "Looks good" (or equivalent).** 2–3 rounds is normal.
 
 ---
 

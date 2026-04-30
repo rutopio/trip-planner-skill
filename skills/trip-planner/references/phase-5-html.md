@@ -73,21 +73,19 @@ The only place `<script>` content is acceptable: **tab-switcher click handlers**
 
 ---
 
-## Generation Strategy: Heredoc Append
+## Generation Strategy: Write + Edit Append
 
-Build the file by appending sections. No skeleton-with-placeholders pattern, no `Edit`-replace dance.
+Use the `Write` tool for the first block, then `Edit` (appending to the end of the file) for each subsequent block. No `cat`, no heredocs, no shell commands.
 
-### Step 1 — `Write` the head + body opening (≤ 400 lines)
+### Step 1 — `Write` the head + body opening
 
-One `Write` produces:
+One `Write` call produces the full `<head>` and opening `<body>` structure:
 - `<!doctype html>` and `<html lang="{user-lang-code}">`
 - `<head>` with `<meta>`, `<title>`, and the allowed CDN tags: **Tailwind CSS + Google Fonts (Inter) + Leaflet CSS/JS** (and any other CDN strictly required by a feature actually in use).
-- Minimal inline `<style>` block — only what Tailwind utilities can't do (custom CSS variables for tokens, Leaflet container sizing, `@media print` rules if useful). Keep it small; Tailwind does 95% of the work via classes.
-- `<body class="bg-white text-zinc-900 antialiased">`, `<header>` (trip title + dates + tagline), `<nav>` (tab switcher buttons styled as a sticky pill row)
+- Minimal inline `<style>` block — only what Tailwind utilities can't do (custom CSS variables for tokens, Leaflet container sizing, `@media print` rules if useful).
+- `<body class="bg-white text-zinc-900 antialiased">`, `<header>`, `<nav>` (sticky tab row)
 
-Stop here. The file is now openable in a browser — empty pages render the header.
-
-**CDN tags (Tailwind + Google Fonts + Leaflet are baseline; add others only if a feature in scope truly needs them):**
+**CDN tags (Tailwind + Google Fonts + Leaflet are baseline):**
 
 ```html
 <script src="https://cdn.tailwindcss.com"></script>
@@ -98,40 +96,31 @@ Stop here. The file is now openable in a browser — empty pages render the head
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 ```
 
-Then in the inline `<style>`:
+Inline `<style>`:
 
 ```css
 :root { font-family: 'Inter', system-ui, sans-serif; }
 #map { height: 480px; border-radius: 12px; border: 1px solid rgb(228 228 231); }
 ```
 
-### Step 2 — `cat >> index.html` for each content block (each ≤ 500 lines)
+### Step 2 — `Edit` to append each content block
 
-One heredoc per logical block:
+For each block, use `Edit` with `old_string` set to the last line already in the file and `new_string` replacing it with that line plus the new block. Keep each block under 500 lines; split further if needed.
 
-```bash
-cat >> "{path}/index.html" << 'EOF'
-<section id="overview" class="mx-auto max-w-5xl px-6 py-12">
-  <!-- weather strip, today card, quick stats — all written as plain HTML -->
-</section>
-EOF
-```
-
-Suggested block order — split further if any approaches 500 lines:
+Block order:
 1. Cover + Overview (title hero, today card, weather, quick stats)
-2. Schedule (day-by-day, full markup)
-3. Spots list (POI cards as plain HTML) **+ a Leaflet map** above or beside the cards: one marker per POI from Phase 2/4 lat/lng, popup shows name + one-line "why" + "Open in Google Maps" link. Cluster markers by day color (Day 1 / Day 2 …) using simple `L.circleMarker` — no plugin needed.
+2. Schedule (day-by-day timeline)
+3. Spots (Leaflet map + POI cards)
 4. Booking (flights, hotels, passes, holiday calendar)
-5. Budget (estimated breakdown table)
+5. Budget (breakdown table)
 6. Checklist (todos, entry forms as `<details>`)
 
-### Step 3 — `cat >> index.html` for the `<script>` block (keep it lean)
+### Step 3 — `Edit` to append the `<script>` block
 
 Three things only — tab switcher, optional currency toggle, Leaflet map bootstrap. The marker array is inlined here (one entry per POI: `{name, day, lat, lng, why, mapsUrl, anchor}`) — that's the only place POI data appears in JS, and it exists *because* Leaflet needs lat/lng programmatically; everything else stays in markup.
 
 ```html
 <script>
-  // Tab switcher: scroll to section on nav click, highlight active nav item on scroll.
   document.querySelectorAll('[data-tab]').forEach(btn => {
     btn.addEventListener('click', e => {
       e.preventDefault();
@@ -139,7 +128,6 @@ Three things only — tab switcher, optional currency toggle, Leaflet map bootst
     });
   });
 
-  // Optional: currency toggle. Reads data-cost / data-currency attributes.
   const toggle = document.getElementById('currency-toggle');
   if (toggle) {
     toggle.addEventListener('click', () => {
@@ -152,10 +140,8 @@ Three things only — tab switcher, optional currency toggle, Leaflet map bootst
     });
   }
 
-  // Leaflet map: inline marker array, color per day, popup links to POI card anchor.
   const POI_MARKERS = [
-    // { name: '清水寺', day: 1, lat: 34.9949, lng: 135.7850, why: '京都代表景點,清晨人少', mapsUrl: '...', anchor: '#poi-kiyomizu' },
-    // ...one entry per POI, written at generation time from Phase 2/4 lat/lng
+    // { name: '清水寺', day: 1, lat: 34.9949, lng: 135.7850, why: '...', mapsUrl: '...', anchor: '#poi-kiyomizu' },
   ];
   const dayColors = ['#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6'];
   if (POI_MARKERS.length && document.getElementById('map')) {
@@ -166,10 +152,10 @@ Three things only — tab switcher, optional currency toggle, Leaflet map bootst
     const group = L.featureGroup();
     POI_MARKERS.forEach(p => {
       L.circleMarker([p.lat, p.lng], {
-        radius: 8, color: dayColors[(p.day - 1) % dayColors.length],
-        fillColor: dayColors[(p.day - 1) % dayColors.length], fillOpacity: 0.85, weight: 2
+        radius: 8, color: dayColors[(p.day-1) % dayColors.length],
+        fillColor: dayColors[(p.day-1) % dayColors.length], fillOpacity: 0.85, weight: 2
       })
-      .bindPopup(`<strong>${p.name}</strong><br><span class="text-xs text-zinc-500">Day ${p.day}</span><br>${p.why}<br><a href="${p.mapsUrl}" target="_blank" class="underline">Google Maps</a> · <a href="${p.anchor}" class="underline">詳情</a>`)
+      .bindPopup(`<strong>${p.name}</strong><br>Day ${p.day} · ${p.why}<br><a href="${p.mapsUrl}" target="_blank">Google Maps</a>`)
       .addTo(group);
     });
     group.addTo(map);
@@ -178,16 +164,9 @@ Three things only — tab switcher, optional currency toggle, Leaflet map bootst
 </script>
 ```
 
-Keep it lean. No marker-clustering plugin, no draw tools, no heatmaps — just markers + popups. If you find yourself adding a TRIP god-object or render loops over POI cards, stop: card content stays in markup, only lat/lng-needing entries live in `POI_MARKERS`.
+### Step 4 — `Edit` to append closing tags
 
-### Step 4 — `cat >> index.html` for closing tags
-
-```bash
-cat >> "{path}/index.html" << 'EOF'
-</body>
-</html>
-EOF
-```
+Append `</body></html>` as the final edit.
 
 ### Step 5 — Stop
 

@@ -275,7 +275,7 @@ For tutorial links, how-to guides, step-by-step (transit card, airport→city, p
 - Search for guides in **user's conversation language FIRST**
 - No quality guide there → **English** fallback
 - **Never link guides in destination's local language** unless user speaks it
-- Purchase/application tutorials (eSIM, transit card, visa, city pass): step-by-step with screenshots if possible
+- Purchase/application tutorials (transit card, visa, city pass): step-by-step with screenshots if possible
 - Include in checklist tab and booking tab where relevant
 - Always recommend cheapest + explain ("Klook KRW 10,500 vs official KRW 12,000 — save 12%")
 - City pass exists: calculate worth based on itinerary

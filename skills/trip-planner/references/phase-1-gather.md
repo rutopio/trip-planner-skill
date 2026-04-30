@@ -46,7 +46,7 @@ Use `AskUserQuestion` and group logically. Schema limits apply (max 4 options pe
 | Flights booked? | If YES: airline, flight#, dep/arr times, airport, **round-trip cost**. If NO: "Roughly what arrival time? Morning or evening preferred?" | Day 1 / last day hours + budget |
 | Hotel booked? | If YES: name, area, check-in/out, breakfast, nights, **cost**. If NO: "Preferred area to stay?" | Home base + budget |
 | Nationality/passport | "What passport?" | Visa + home currency |
-| SIM card | "Bought a SIM/eSIM? Cost?" — recommend options if not | Budget + checklist |
+| SIM card | "Bought a SIM/eSIM? Cost?" — record for budget only, do NOT recommend options | Budget only |
 | Airport transfer | "Need pickup/drop-off?" — note direction; if no, research transit | Day 1 / last day logistics |
 | Already-decided plans | "Any tickets purchased, friends to meet, restaurant reservations, tours, theme park tickets?" — list specific examples | Immovable blocks come first |
 | Been here before | If YES: "What did you visit? Want new places or revisits?" | Avoid re-recommending |
@@ -77,28 +77,34 @@ Invoke the `flight-intelligence` skill. Pass origin, destination, fixed/flexible
 
 **Do NOT accept vague answers like "moderate" or "mid-range" without drilling down.**
 
-**Render the budget table as markdown and ask the user to reply in free text** (e.g. "Comfort overall, but Premium on food"). Do NOT use `AskUserQuestion` here — the 7 line items × 3 tiers cannot fit the 4-option schema limit. Research real prices via `WebSearch` first if needed — **search in the destination's local language** for accurate current prices ([search-language-rules.md](search-language-rules.md)).
+Research real prices via `WebSearch` first — **search in the destination's local language** for accurate current prices ([search-language-rules.md](search-language-rules.md)). Then ask per-category via **`AskUserQuestion` with 3 options (Budget / Comfort / Premium)**, one call per category. Show the real price ranges in each option's `description` field so the user can make an informed choice.
 
-> **Budget Confirmation ({destination}, {days} days, {N} people):**
->
-> | Item | Budget | Comfort | Premium |
-> |------|--------|---------|---------|
-> | Flights (round-trip/person) | NT$X-Y | NT$X-Y | NT$X-Y |
-> | Accommodation (/night) | NT$X-Y | NT$X-Y | NT$X-Y |
-> | Meals (/day/person) | NT$X-Y | NT$X-Y | NT$X-Y |
-> | Transportation (/day) | NT$X-Y | NT$X-Y | NT$X-Y |
-> | Tickets (/day) | NT$X-Y | NT$X-Y | NT$X-Y |
-> | Shopping (whole trip) | NT$X-Y | NT$X-Y | NT$X-Y |
-> | **Total per person** | **NT$X-Y** | **NT$X-Y** | **NT$X-Y** |
+**Categories to ask (one `AskUserQuestion` each):**
 
-Let user mix-and-match ("save on accommodation but eat well"). Record choices.
+1. Accommodation (/night) — skip if already booked
+2. Meals (/day/person)
+3. Transportation (/day)
+4. Tickets & Attractions (/day)
+5. Shopping (whole trip)
+6. Flights (round-trip/person) — skip if already booked
 
-**If flights/hotel already booked**, remove those rows and recompute "remaining budget" for activities + food + shopping + transport only.
+Each call format (header and question text rendered in user's conversation language; structure shown in English):
+```
+header: "Accommodation" (≤ 12 chars)
+question: "Accommodation budget per night? (real price ranges filled in after WebSearch)"
+multiSelect: false
+options:
+  - label: "Budget"    description: "NT$X–Y / hostel, guesthouse"
+  - label: "Comfort"   description: "NT$X–Y / 3–4 star, city center"
+  - label: "Premium"   description: "NT$X–Y / 4–5 star, breakfast included"
+```
 
-**Key questions:**
-- "Anything you want to splurge on?"
-- "Roughly how much for shopping? Anything specific?"
-- "Buying souvenirs? For how many people?"
+After all categories, output a summary table in markdown (for reference only) and proceed — do NOT ask the user to retype anything.
+
+**If flights/hotel already booked**, skip those categories and recompute "remaining budget" for activities + food + shopping + transport only.
+
+**Splurge & shopping follow-up (`AskUserQuestion`, `multiSelect: true`):**
+Ask which categories the user wants to splurge on beyond their base tier. Follow with a separate single-select for total shopping budget range if not covered by the tier choices.
 
 ---
 

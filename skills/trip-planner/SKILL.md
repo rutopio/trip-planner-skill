@@ -60,10 +60,10 @@ The Phase 4.5 final confirmation gate is in [phase-4_5-style-and-audit.md](refer
 See [phase-5-html.md](references/phase-5-html.md). Summary: **write content as HTML directly, not as data**. Trip details (names, prices, addresses, schedule) live in the markup in the user's language. JS is kept small: tab switcher, optional currency toggle, and the map bootstrap (Leaflet init + marker list inlined from POI lat/lng). No `const TRIP = {...}` god-object, no JSON shards, no localStorage state, no i18n.
 
 **Generation strategy** (avoids timeouts):
-1. `Write` head + body opening (Tailwind + Google Fonts + Leaflet CSS/JS CDN tags, minimal inline `<style>` for tokens & overrides, header, nav) — < 400 lines
-2. `cat >> index.html` heredoc for each content block (cover/overview, schedule, spots, booking, budget, checklist) — each < 500 lines, all plain HTML
-3. `cat >> index.html` for the `<script>` (tab switcher + optional currency toggle + Leaflet bootstrap with inlined POI marker array)
-4. `cat >> index.html` for `</body></html>`
+1. `Write` head + body opening (Tailwind + Google Fonts + Leaflet CSS/JS CDN tags, minimal inline `<style>` for tokens & overrides, header, nav)
+2. `Edit` to append each content block (cover/overview, schedule, spots, booking, budget, checklist) — each < 500 lines, all plain HTML
+3. `Edit` to append the `<script>` (tab switcher + optional currency toggle + Leaflet bootstrap with inlined POI marker array)
+4. `Edit` to append `</body></html>`
 
 Before any `mkdir`, run `pwd` and confirm the absolute output path: `{pwd}/{destination-slug}-{year}/index.html`.
 
